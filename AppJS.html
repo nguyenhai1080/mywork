@@ -1,0 +1,1112 @@
+<script>
+const PAGE_TITLES = {
+  'my-work': 'My Work',
+  'tasks': 'Tasks',
+  'projects': 'Projects',
+  'dashboard': 'Dashboard'
+};
+
+const STATE = {
+  page: 'my-work',
+  tasks: [],
+  users: [],
+  currentUser: null,
+  today: '',
+  taskFilter: 'ACTIVE',
+  taskSearch: '',
+  currentTaskDetail: null,
+  loadingTasks: false
+};
+
+const DEMO_PROJECTS = [
+  {
+    name: 'Halotel OTT TV',
+    code: 'PRJ0001',
+    progress: 48,
+    status: 'IN PROGRESS',
+    health: 'ON TRACK',
+    target: '31 Dec 2026',
+    completed: '6 / 14',
+    milestone: 'Vendor selected - 15 Oct',
+    next: 'Finalize Business Model'
+  },
+  {
+    name: 'Dominica Super App',
+    code: 'PRJ0002',
+    progress: 35,
+    status: 'PLANNING',
+    health: 'ATTENTION',
+    target: '31 Mar 2027',
+    completed: '4 / 12',
+    milestone: 'Business model - 30 Sep',
+    next: 'Complete benchmark framework'
+  }
+];
+
+init_();
+
+async function init_() {
+  bindNavigation_();
+  bindHeader_();
+  bindPageDelegation_();
+  bindOverlayDelegation_();
+  navigateTo('my-work');
+
+  try {
+    await loadTaskBootstrap_();
+    renderCurrentPage_();
+  } catch (error) {
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function bindNavigation_() {
+  document.querySelectorAll('.nav-item[data-page]').forEach(button => {
+    button.addEventListener('click', () => {
+      navigateTo(button.dataset.page);
+      closeMobileSidebar_();
+    });
+  });
+}
+
+function bindHeader_() {
+  const addBtn = document.getElementById('add-btn');
+  const addMenu = document.getElementById('add-menu');
+  const mobileBtn = document.getElementById('mobile-menu-btn');
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+
+  addBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    addMenu.classList.toggle('hidden');
+  });
+
+  addMenu.querySelectorAll('button').forEach(button => {
+    button.addEventListener('click', () => {
+      addMenu.classList.add('hidden');
+      if (button.dataset.action === 'new-task') {
+        openNewTaskModal_();
+      } else {
+        showToast_('Project creation will be connected in PR04.', 'info');
+      }
+    });
+  });
+
+  document.addEventListener('click', () => addMenu.classList.add('hidden'));
+
+  mobileBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    backdrop.classList.toggle('show');
+  });
+
+  backdrop.addEventListener('click', closeMobileSidebar_);
+}
+
+function bindPageDelegation_() {
+  const pageContent = document.getElementById('page-content');
+
+  pageContent.addEventListener('click', event => {
+    const button = event.target.closest('[data-action]');
+    if (!button) return;
+
+    const action = button.dataset.action;
+    const taskId = button.dataset.taskId;
+
+    if (action === 'new-task') openNewTaskModal_();
+    if (action === 'open-task') openTaskDetail_(taskId);
+    if (action === 'back-tasks') {
+      STATE.currentTaskDetail = null;
+      navigateTo('tasks');
+    }
+    if (action === 'edit-task') openEditTaskModal_();
+    if (action === 'update-result') openUpdateResultModal_();
+    if (action === 'complete-task') openCompleteTaskModal_();
+    if (action === 'reopen-task') openReopenTaskModal_();
+    if (action === 'cancel-task') openCancelTaskModal_();
+    if (action === 'set-task-filter') {
+      STATE.taskFilter = button.dataset.filter || 'ACTIVE';
+      renderCurrentPage_();
+    }
+  });
+
+  pageContent.addEventListener('input', event => {
+    if (event.target.id === 'task-search') {
+      STATE.taskSearch = event.target.value || '';
+      renderTaskTableOnly_();
+    }
+  });
+}
+
+function bindOverlayDelegation_() {
+  const root = document.getElementById('overlay-root');
+
+  root.addEventListener('click', event => {
+    if (event.target.matches('.modal-backdrop') || event.target.closest('[data-close-modal]')) {
+      closeModal_();
+      return;
+    }
+
+    const actionButton = event.target.closest('[data-modal-action]');
+    if (!actionButton) return;
+
+    const action = actionButton.dataset.modalAction;
+    if (action === 'save-new-task') submitNewTask_();
+    if (action === 'save-edit-task') submitEditTask_();
+    if (action === 'save-task-result') submitTaskResult_();
+    if (action === 'complete-task') submitCompleteTask_();
+    if (action === 'reopen-task') submitReopenTask_();
+    if (action === 'cancel-task') submitCancelTask_();
+  });
+
+  root.addEventListener('change', event => {
+    if (event.target.id === 'result-status') {
+      updateResultDynamic_();
+    }
+  });
+
+  root.addEventListener('input', event => {
+    if (event.target.id === 'result-progress') {
+      updateProgressReasonVisibility_();
+    }
+  });
+}
+
+function closeMobileSidebar_() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-backdrop').classList.remove('show');
+}
+
+function navigateTo(page) {
+  STATE.page = page;
+  STATE.currentTaskDetail = page === 'tasks' ? STATE.currentTaskDetail : null;
+
+  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === page);
+  });
+
+  document.getElementById('page-title').textContent = PAGE_TITLES[page] || 'MyWork';
+  renderCurrentPage_();
+}
+
+function renderCurrentPage_() {
+  const target = document.getElementById('page-content');
+
+  if (STATE.page === 'tasks' && STATE.currentTaskDetail) {
+    target.innerHTML = renderTaskDetail_(STATE.currentTaskDetail);
+    return;
+  }
+
+  const renderers = {
+    'my-work': renderMyWork_,
+    'tasks': renderTasks_,
+    'projects': renderProjects_,
+    'dashboard': renderDashboard_
+  };
+
+  target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
+}
+
+async function loadTaskBootstrap_() {
+  STATE.loadingTasks = true;
+  const data = await serverCall_('apiTaskBootstrap');
+  STATE.tasks = data.tasks || [];
+  STATE.users = data.users || [];
+  STATE.currentUser = data.currentUser || null;
+  STATE.today = data.today || '';
+  STATE.loadingTasks = false;
+}
+
+async function refreshTasks_() {
+  STATE.loadingTasks = true;
+  try {
+    STATE.tasks = await serverCall_('apiListTasks', {});
+  } finally {
+    STATE.loadingTasks = false;
+  }
+}
+
+function renderMyWork_() {
+  const active = STATE.tasks.filter(isTaskActive_).length;
+  const waiting = STATE.tasks.filter(task => task.Status === 'WAITING').length;
+  const overdue = STATE.tasks.filter(task => task.IsOverdue).length;
+
+  return `
+    ${hero_('WORK FOCUS', String(active || 0), 'active work items', [
+      { label: 'Overdue', value: String(overdue), note: 'Live task data' },
+      { label: 'Waiting', value: String(waiting), note: 'Live task data' }
+    ])}
+
+    <div class="metric-grid">
+      ${metric_('Active Tasks', String(active), 'Task Core is live')}
+      ${metric_('Overdue', String(overdue), 'Calculated from due date')}
+      ${metric_('Waiting', String(waiting), 'External dependency')}
+      ${metric_('My Work Engine', 'PR03', 'Classification comes next')}
+    </div>
+
+    <div class="panel section-stack">
+      ${panelHeader_('NEXT RELEASE', 'My Work classification', 'PR03')}
+      <div class="placeholder-copy">
+        Task data is now live. Need Attention, Today, Upcoming and Waiting classification will be connected in PR03.
+      </div>
+    </div>
+  `;
+}
+
+function renderTasks_() {
+  if (STATE.loadingTasks) return renderLoading_('Loading tasks...');
+
+  const active = STATE.tasks.filter(isTaskActive_);
+  const completed = STATE.tasks.filter(task => task.Status === 'COMPLETED');
+  const waiting = STATE.tasks.filter(task => task.Status === 'WAITING');
+  const overdue = STATE.tasks.filter(task => task.IsOverdue);
+  const high = active.filter(task => task.Priority === 'HIGH');
+  const noNextAction = active.filter(task => !String(task.NextAction || '').trim());
+
+  return `
+    ${hero_('TASK MANAGEMENT', String(active.length), 'active tasks', [
+      { label: 'In progress', value: String(active.filter(task => task.Status === 'IN_PROGRESS').length), note: 'Live from Google Sheets' },
+      { label: 'Completed', value: String(completed.length), note: 'All completed tasks' }
+    ])}
+
+    <div class="metric-grid">
+      ${metric_('High Priority', String(high.length), 'Active high-priority tasks')}
+      ${metric_('Waiting', String(waiting.length), 'External dependency')}
+      ${metric_('Overdue', String(overdue.length), 'Calculated automatically')}
+      ${metric_('No Next Action', String(noNextAction.length), 'Needs planning')}
+    </div>
+
+    <div class="section-stack">
+      <div class="task-toolbar-card">
+        <div class="toolbar task-filter-bar">
+          ${filterChip_('ACTIVE', 'All Active')}
+          ${filterChip_('IN_PROGRESS', 'In Progress')}
+          ${filterChip_('WAITING', 'Waiting')}
+          ${filterChip_('OVERDUE', 'Overdue')}
+          ${filterChip_('COMPLETED', 'Completed')}
+          ${filterChip_('ALL', 'All')}
+        </div>
+        <div class="task-toolbar-actions">
+          <input id="task-search" class="search-input" type="search" placeholder="Search tasks..." value="${escapeHtml_(STATE.taskSearch)}">
+          <button class="primary-btn" type="button" data-action="new-task">+ New Task</button>
+        </div>
+      </div>
+
+      <div id="task-table-host">
+        ${renderTaskTable_()}
+      </div>
+    </div>
+  `;
+}
+
+function renderTaskTableOnly_() {
+  const host = document.getElementById('task-table-host');
+  if (host) host.innerHTML = renderTaskTable_();
+}
+
+function renderTaskTable_() {
+  const tasks = getFilteredTasks_();
+  if (!tasks.length) {
+    return `
+      <div class="empty-state">
+        <h2>No tasks found</h2>
+        <p>Create a task or change the current filter.</p>
+        <button class="primary-btn empty-state-btn" type="button" data-action="new-task">+ New Task</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="table-wrap">
+      <table class="data-table task-table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Priority</th>
+            <th>Assigned by</th>
+            <th>Due</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th>Next Action</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tasks.map(taskRowLive_).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderTaskDetail_(detail) {
+  const task = detail.task;
+  const latest = detail.latestResult;
+  const calc = detail.calculated || {};
+  const statusClass = statusBadgeClass_(task.Status);
+  const dueLabel = calc.IsOverdue
+    ? `Overdue ${calc.OverdueDays} day${Number(calc.OverdueDays) === 1 ? '' : 's'}`
+    : `Due ${formatDate_(task.DueDate)}`;
+  const terminal = ['COMPLETED', 'CANCELLED'].includes(task.Status);
+
+  return `
+    <div class="detail-toolbar">
+      <button class="ghost-btn" type="button" data-action="back-tasks">Back to Tasks</button>
+      <div class="detail-actions">
+        <button class="ghost-btn" type="button" data-action="edit-task">Edit Task</button>
+        ${!terminal ? `<button class="secondary-btn" type="button" data-action="update-result">Update Result</button>` : ''}
+        ${!terminal ? `<button class="primary-btn" type="button" data-action="complete-task">Complete</button>` : ''}
+        ${task.Status === 'COMPLETED' ? `<button class="primary-btn" type="button" data-action="reopen-task">Reopen</button>` : ''}
+        ${!terminal ? `<button class="danger-text-btn" type="button" data-action="cancel-task">Cancel</button>` : ''}
+      </div>
+    </div>
+
+    <div class="task-detail-hero">
+      <div>
+        <div class="hero-kicker">${escapeHtml_(task.TaskID)}</div>
+        <h2>${escapeHtml_(task.TaskTitle)}</h2>
+        <div class="detail-badges">
+          <span class="badge ${priorityBadgeClass_(task.Priority)}">${escapeHtml_(task.Priority)}</span>
+          <span class="badge ${statusClass}">${escapeHtml_(statusLabel_(task.Status))}</span>
+          <span class="badge ${calc.IsOverdue ? 'badge-danger' : 'badge-info'}">${escapeHtml_(dueLabel)}</span>
+        </div>
+      </div>
+      <div class="detail-progress-box">
+        <div class="detail-progress-value">${Number(task.Progress) || 0}%</div>
+        <div class="progress-track"><div class="progress-fill" style="width:${Number(task.Progress) || 0}%"></div></div>
+      </div>
+    </div>
+
+    <div class="detail-grid section-stack">
+      <div class="panel detail-main-panel">
+        ${panelHeader_('CURRENT', 'Latest Result', latest ? `Updated ${formatDate_(latest.UpdateDate)}` : 'No update yet')}
+        <div class="detail-result-body">
+          ${latest ? renderResultSections_(latest) : `<div class="empty-inline">No result update has been recorded yet.</div>`}
+        </div>
+      </div>
+
+      <div class="panel detail-side-panel">
+        ${panelHeader_('TASK', 'Information', task.SourceType === 'PROJECT' ? 'Project Task' : 'Standalone')}
+        <div class="info-list">
+          ${infoRow_('Owner', userName_(task.OwnerID))}
+          ${infoRow_('Assigned By', task.AssignedBy || '-')}
+          ${infoRow_('Assigned Date', formatDate_(task.AssignedDate))}
+          ${infoRow_('Due Date', formatDate_(task.DueDate))}
+          ${infoRow_('Expected Output', task.ExpectedOutput || '-')}
+          ${task.NextAction ? infoRow_('Next Action', task.NextAction) : ''}
+          ${task.NextActionDue ? infoRow_('Next Action Due', formatDate_(task.NextActionDue)) : ''}
+          ${task.WaitingFor ? infoRow_('Waiting For', task.WaitingFor) : ''}
+          ${task.FollowUpDate ? infoRow_('Follow-up', formatDate_(task.FollowUpDate)) : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel section-stack">
+      ${panelHeader_('HISTORY', 'Result Timeline', `${(detail.history || []).length} update${(detail.history || []).length === 1 ? '' : 's'}`)}
+      <div class="timeline-list">
+        ${(detail.history || []).length
+          ? detail.history.map(historyItem_).join('')
+          : `<div class="empty-inline">Task created. No result history yet.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderProjects_() {
+  return `
+    ${hero_('PROJECT PORTFOLIO', '2', 'demo projects until PR04', [
+      { label: 'On track', value: '1', note: 'Demo data' },
+      { label: 'Attention', value: '1', note: 'Demo data' }
+    ])}
+    <div class="project-grid section-stack">
+      ${projectCard_(DEMO_PROJECTS[0])}
+      ${projectCard_(DEMO_PROJECTS[1])}
+    </div>
+  `;
+}
+
+function renderDashboard_() {
+  const active = STATE.tasks.filter(isTaskActive_).length;
+  const overdue = STATE.tasks.filter(task => task.IsOverdue).length;
+  const waiting = STATE.tasks.filter(task => task.Status === 'WAITING').length;
+
+  return `
+    ${hero_('WORK OVERVIEW', String(active), 'active tasks', [
+      { label: 'Overdue', value: String(overdue), note: 'Live task data' },
+      { label: 'Waiting', value: String(waiting), note: 'Live task data' }
+    ])}
+    <div class="metric-grid">
+      ${metric_('Active Tasks', String(active), 'Task Core live')}
+      ${metric_('Completed', String(STATE.tasks.filter(task => task.Status === 'COMPLETED').length), 'All completed tasks')}
+      ${metric_('Projects', 'PR04', 'Project Core next')}
+      ${metric_('Dashboard', 'PR06', 'Hardening and summary later')}
+    </div>
+  `;
+}
+
+function filterChip_(filter, label) {
+  return `<button class="filter-chip ${STATE.taskFilter === filter ? 'active' : ''}" type="button" data-action="set-task-filter" data-filter="${filter}">${escapeHtml_(label)}</button>`;
+}
+
+function getFilteredTasks_() {
+  const query = String(STATE.taskSearch || '').trim().toLowerCase();
+
+  return STATE.tasks.filter(task => {
+    if (STATE.taskFilter === 'ACTIVE' && !isTaskActive_(task)) return false;
+    if (STATE.taskFilter === 'IN_PROGRESS' && task.Status !== 'IN_PROGRESS') return false;
+    if (STATE.taskFilter === 'WAITING' && task.Status !== 'WAITING') return false;
+    if (STATE.taskFilter === 'OVERDUE' && !task.IsOverdue) return false;
+    if (STATE.taskFilter === 'COMPLETED' && task.Status !== 'COMPLETED') return false;
+
+    if (!query) return true;
+    return [
+      task.TaskTitle,
+      task.Description,
+      task.AssignedBy,
+      task.ExpectedOutput,
+      task.NextAction,
+      task.WaitingFor,
+      task.TaskID
+    ].some(value => String(value || '').toLowerCase().includes(query));
+  });
+}
+
+function taskRowLive_(task) {
+  const dueText = task.IsOverdue
+    ? `<span class="due-danger">Overdue ${Number(task.OverdueDays) || 0}d</span><div class="work-context">${formatDate_(task.DueDate)}</div>`
+    : formatDate_(task.DueDate);
+
+  return `
+    <tr>
+      <td>
+        <button class="table-link" type="button" data-action="open-task" data-task-id="${escapeHtml_(task.TaskID)}">${escapeHtml_(task.TaskTitle)}</button>
+        <div class="work-context">${escapeHtml_(task.TaskID)} - ${task.SourceType === 'PROJECT' ? 'Project task' : 'Standalone'}</div>
+      </td>
+      <td><span class="badge ${priorityBadgeClass_(task.Priority)}">${escapeHtml_(task.Priority)}</span></td>
+      <td>${escapeHtml_(task.AssignedBy || '-')}</td>
+      <td>${dueText}</td>
+      <td>
+        <div class="progress-row compact-progress">
+          <div class="progress-track"><div class="progress-fill" style="width:${Number(task.Progress) || 0}%"></div></div>
+          <div class="progress-value">${Number(task.Progress) || 0}%</div>
+        </div>
+      </td>
+      <td><span class="badge ${statusBadgeClass_(task.Status)}">${escapeHtml_(statusLabel_(task.Status))}</span></td>
+      <td>${escapeHtml_(task.NextAction || '-')}</td>
+      <td><button class="row-action-btn" type="button" data-action="open-task" data-task-id="${escapeHtml_(task.TaskID)}">Open</button></td>
+    </tr>
+  `;
+}
+
+async function openTaskDetail_(taskId) {
+  if (!taskId) return;
+  showPageLoading_('Loading task...');
+  try {
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', taskId);
+    STATE.page = 'tasks';
+    document.getElementById('page-title').textContent = 'Task Detail';
+    renderCurrentPage_();
+  } catch (error) {
+    showToast_(error.message || String(error), 'error');
+    STATE.currentTaskDetail = null;
+    navigateTo('tasks');
+  }
+}
+
+function openNewTaskModal_() {
+  if (!STATE.users.length) {
+    showToast_('User list is still loading. Try again in a moment.', 'error');
+    return;
+  }
+
+  const ownerId = STATE.currentUser ? STATE.currentUser.UserID : STATE.users[0].UserID;
+  showModal_('New Task', `
+    <form id="new-task-form" class="form-stack" onsubmit="return false;">
+      ${formField_('Task Title *', `<input name="taskTitle" required maxlength="500" placeholder="What needs to be done?">`)}
+      ${formField_('Description', `<textarea name="description" rows="3" placeholder="Context or scope"></textarea>`)}
+      <div class="form-grid-2">
+        ${formField_('Owner *', userSelectHtml_('ownerId', ownerId))}
+        ${formField_('Assigned By', `<input name="assignedBy" placeholder="Manager / stakeholder">`)}
+      </div>
+      <div class="form-grid-3">
+        ${formField_('Priority *', prioritySelectHtml_('priority', 'MEDIUM'))}
+        ${formField_('Assigned Date *', `<input name="assignedDate" type="date" value="${escapeHtml_(STATE.today)}" required>`)}
+        ${formField_('Due Date *', `<input name="dueDate" type="date" required>`)}
+      </div>
+      ${formField_('Expected Output', `<textarea name="expectedOutput" rows="2" placeholder="What result should this task deliver?"></textarea>`)}
+      <div class="form-grid-2">
+        ${formField_('Next Action', `<input name="nextAction" placeholder="Immediate next step">`)}
+        ${formField_('Next Action Due', `<input name="nextActionDue" type="date">`)}
+      </div>
+    </form>
+  `, [
+    { label: 'Cancel', className: 'ghost-btn', close: true },
+    { label: 'Create Task', className: 'primary-btn', action: 'save-new-task' }
+  ]);
+}
+
+async function submitNewTask_() {
+  const form = document.getElementById('new-task-form');
+  if (!validateForm_(form)) return;
+
+  const payload = formObject_(form);
+  setModalBusy_(true, 'Creating...');
+  try {
+    const result = await serverCall_('apiCreateTask', payload);
+    closeModal_();
+    await refreshTasks_();
+    showToast_('Task created: ' + result.task.TaskID, 'success');
+    STATE.currentTaskDetail = null;
+    navigateTo('tasks');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function openEditTaskModal_() {
+  const task = STATE.currentTaskDetail && STATE.currentTaskDetail.task;
+  if (!task) return;
+
+  showModal_('Edit Task', `
+    <form id="edit-task-form" class="form-stack" onsubmit="return false;">
+      ${formField_('Task Title *', `<input name="taskTitle" required maxlength="500" value="${escapeHtmlAttr_(task.TaskTitle)}">`)}
+      ${formField_('Description', `<textarea name="description" rows="3">${escapeHtml_(task.Description || '')}</textarea>`)}
+      <div class="form-grid-2">
+        ${formField_('Owner *', userSelectHtml_('ownerId', task.OwnerID))}
+        ${formField_('Assigned By', `<input name="assignedBy" value="${escapeHtmlAttr_(task.AssignedBy || '')}">`)}
+      </div>
+      <div class="form-grid-3">
+        ${formField_('Priority *', prioritySelectHtml_('priority', task.Priority))}
+        ${formField_('Assigned Date *', `<input name="assignedDate" type="date" value="${escapeHtmlAttr_(task.AssignedDate)}" required>`)}
+        ${formField_('Due Date *', `<input name="dueDate" type="date" value="${escapeHtmlAttr_(task.DueDate)}" required>`)}
+      </div>
+      ${formField_('Expected Output', `<textarea name="expectedOutput" rows="2">${escapeHtml_(task.ExpectedOutput || '')}</textarea>`)}
+      <div class="form-help">Status, Progress, Next Action and Waiting fields are changed through Update Result, not Edit Task.</div>
+    </form>
+  `, [
+    { label: 'Cancel', className: 'ghost-btn', close: true },
+    { label: 'Save Changes', className: 'primary-btn', action: 'save-edit-task' }
+  ]);
+}
+
+async function submitEditTask_() {
+  const detail = STATE.currentTaskDetail;
+  const form = document.getElementById('edit-task-form');
+  if (!detail || !validateForm_(form)) return;
+
+  setModalBusy_(true, 'Saving...');
+  try {
+    await serverCall_('apiUpdateTaskMetadata', detail.task.TaskID, formObject_(form));
+    closeModal_();
+    await refreshTasks_();
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
+    renderCurrentPage_();
+    showToast_('Task metadata updated.', 'success');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function openUpdateResultModal_() {
+  const task = STATE.currentTaskDetail && STATE.currentTaskDetail.task;
+  if (!task) return;
+
+  const defaultStatus = task.Status === 'NOT_STARTED' ? 'IN_PROGRESS' : task.Status;
+  const defaultProgress = Number(task.Progress) === 0 ? 10 : Number(task.Progress);
+
+  showModal_('Update Result', `
+    <form id="task-result-form" class="form-stack" onsubmit="return false;" data-current-progress="${Number(task.Progress) || 0}">
+      <div class="form-grid-3">
+        ${formField_('Update Date *', `<input name="updateDate" type="date" value="${escapeHtmlAttr_(STATE.today)}" required>`)}
+        ${formField_('Status *', statusSelectHtml_('status', defaultStatus, task.Status))}
+        ${formField_('Progress *', `<input id="result-progress" name="progress" type="number" min="0" max="100" value="${defaultProgress}" required>`)}
+      </div>
+      ${formField_('Completed Work', `<textarea name="completedWork" rows="3" placeholder="What has been completed since the last update?"></textarea>`, 'completed-field')}
+      ${formField_('Pending Work', `<textarea name="pendingWork" rows="3" placeholder="What remains pending?"></textarea>`, 'pending-field')}
+      ${formField_('Issues / Constraints', `<textarea name="issuesConstraints" rows="3" placeholder="Blockers, risks or limitations"></textarea>`, 'issues-field')}
+      <div id="waiting-fields" class="form-grid-2 hidden">
+        ${formField_('Waiting For *', `<input name="waitingFor" value="${escapeHtmlAttr_(task.WaitingFor || '')}" placeholder="Who or what are we waiting for?">`)}
+        ${formField_('Follow-up Date', `<input name="followUpDate" type="date" value="${escapeHtmlAttr_(task.FollowUpDate || '')}">`)}
+      </div>
+      <div id="next-action-fields" class="form-grid-2">
+        ${formField_('Next Action', `<input name="nextAction" value="${escapeHtmlAttr_(task.NextAction || '')}" placeholder="Immediate next step">`)}
+        ${formField_('Next Action Due', `<input name="nextActionDue" type="date" value="${escapeHtmlAttr_(task.NextActionDue || '')}">`)}
+      </div>
+      <div id="progress-reason-field" class="hidden">
+        ${formField_('Reason for progress decrease *', `<textarea name="progressChangeReason" rows="2" placeholder="Why did progress decrease?"></textarea>`)}
+      </div>
+    </form>
+  `, [
+    { label: 'Cancel', className: 'ghost-btn', close: true },
+    { label: 'Save Update', className: 'primary-btn', action: 'save-task-result' }
+  ]);
+
+  updateResultDynamic_();
+}
+
+function updateResultDynamic_() {
+  const form = document.getElementById('task-result-form');
+  if (!form) return;
+
+  const status = form.elements.status.value;
+  const progress = form.elements.progress;
+  const waitingFields = document.getElementById('waiting-fields');
+  const nextFields = document.getElementById('next-action-fields');
+
+  waitingFields.classList.toggle('hidden', status !== 'WAITING');
+  nextFields.classList.toggle('hidden', status === 'COMPLETED' || status === 'CANCELLED');
+
+  if (status === 'COMPLETED') {
+    progress.value = 100;
+    progress.readOnly = true;
+  } else if (status === 'CANCELLED') {
+    progress.value = Number(form.dataset.currentProgress) || 0;
+    progress.readOnly = true;
+  } else {
+    progress.readOnly = false;
+    if (status === 'NOT_STARTED') progress.value = 0;
+  }
+
+  updateProgressReasonVisibility_();
+}
+
+function updateProgressReasonVisibility_() {
+  const form = document.getElementById('task-result-form');
+  const host = document.getElementById('progress-reason-field');
+  if (!form || !host) return;
+
+  const current = Number(form.dataset.currentProgress) || 0;
+  const next = Number(form.elements.progress.value);
+  const status = form.elements.status.value;
+  host.classList.toggle('hidden', !(next < current && status !== 'CANCELLED'));
+}
+
+async function submitTaskResult_() {
+  const detail = STATE.currentTaskDetail;
+  const form = document.getElementById('task-result-form');
+  if (!detail || !validateForm_(form)) return;
+
+  const payload = formObject_(form);
+  setModalBusy_(true, 'Saving...');
+  try {
+    await serverCall_('apiAddTaskResult', detail.task.TaskID, payload);
+    closeModal_();
+    await refreshTasks_();
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
+    renderCurrentPage_();
+    showToast_('Result update saved.', 'success');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function openCompleteTaskModal_() {
+  const task = STATE.currentTaskDetail && STATE.currentTaskDetail.task;
+  if (!task) return;
+
+  showModal_('Complete Task', `
+    <form id="complete-task-form" class="form-stack" onsubmit="return false;">
+      ${formField_('Final Result / Completed Work *', `<textarea name="completedWork" rows="5" required placeholder="Describe the final result delivered"></textarea>`)}
+      ${formField_('Completed Date *', `<input name="completedDate" type="date" value="${escapeHtmlAttr_(STATE.today)}" required>`)}
+    </form>
+  `, [
+    { label: 'Cancel', className: 'ghost-btn', close: true },
+    { label: 'Complete Task', className: 'primary-btn', action: 'complete-task' }
+  ]);
+}
+
+async function submitCompleteTask_() {
+  const detail = STATE.currentTaskDetail;
+  const form = document.getElementById('complete-task-form');
+  if (!detail || !validateForm_(form)) return;
+
+  setModalBusy_(true, 'Completing...');
+  try {
+    await serverCall_('apiCompleteTask', detail.task.TaskID, formObject_(form));
+    closeModal_();
+    await refreshTasks_();
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
+    renderCurrentPage_();
+    showToast_('Task completed.', 'success');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function openReopenTaskModal_() {
+  const task = STATE.currentTaskDetail && STATE.currentTaskDetail.task;
+  if (!task) return;
+
+  showModal_('Reopen Task', `
+    <form id="reopen-task-form" class="form-stack" onsubmit="return false;">
+      ${formField_('Reason *', `<textarea name="reason" rows="3" required placeholder="Why is this task being reopened?"></textarea>`)}
+      <div class="form-grid-2">
+        ${formField_('Progress *', `<input name="progress" type="number" min="1" max="99" value="90" required>`)}
+        ${formField_('Update Date *', `<input name="updateDate" type="date" value="${escapeHtmlAttr_(STATE.today)}" required>`)}
+      </div>
+      <div class="form-grid-2">
+        ${formField_('Next Action *', `<input name="nextAction" required placeholder="What happens next?">`)}
+        ${formField_('Next Action Due', `<input name="nextActionDue" type="date">`)}
+      </div>
+    </form>
+  `, [
+    { label: 'Cancel', className: 'ghost-btn', close: true },
+    { label: 'Reopen Task', className: 'primary-btn', action: 'reopen-task' }
+  ]);
+}
+
+async function submitReopenTask_() {
+  const detail = STATE.currentTaskDetail;
+  const form = document.getElementById('reopen-task-form');
+  if (!detail || !validateForm_(form)) return;
+
+  setModalBusy_(true, 'Reopening...');
+  try {
+    await serverCall_('apiReopenTask', detail.task.TaskID, formObject_(form));
+    closeModal_();
+    await refreshTasks_();
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
+    renderCurrentPage_();
+    showToast_('Task reopened.', 'success');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function openCancelTaskModal_() {
+  showModal_('Cancel Task', `
+    <form id="cancel-task-form" class="form-stack" onsubmit="return false;">
+      ${formField_('Cancellation Reason *', `<textarea name="reason" rows="4" required placeholder="Why is this task being cancelled?"></textarea>`)}
+      ${formField_('Update Date *', `<input name="updateDate" type="date" value="${escapeHtmlAttr_(STATE.today)}" required>`)}
+      <div class="danger-note">Cancellation keeps the task history. The task is not deleted.</div>
+    </form>
+  `, [
+    { label: 'Back', className: 'ghost-btn', close: true },
+    { label: 'Cancel Task', className: 'danger-btn', action: 'cancel-task' }
+  ]);
+}
+
+async function submitCancelTask_() {
+  const detail = STATE.currentTaskDetail;
+  const form = document.getElementById('cancel-task-form');
+  if (!detail || !validateForm_(form)) return;
+
+  setModalBusy_(true, 'Cancelling...');
+  try {
+    await serverCall_('apiCancelTask', detail.task.TaskID, formObject_(form));
+    closeModal_();
+    await refreshTasks_();
+    STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
+    renderCurrentPage_();
+    showToast_('Task cancelled.', 'success');
+  } catch (error) {
+    setModalBusy_(false);
+    showToast_(error.message || String(error), 'error');
+  }
+}
+
+function showModal_(title, bodyHtml, actions) {
+  const root = document.getElementById('overlay-root');
+  root.innerHTML = `
+    <div class="modal-backdrop">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="${escapeHtmlAttr_(title)}">
+        <div class="modal-header">
+          <div>
+            <div class="panel-kicker">MYWORK</div>
+            <h2>${escapeHtml_(title)}</h2>
+          </div>
+          <button class="modal-close" type="button" data-close-modal aria-label="Close">x</button>
+        </div>
+        <div class="modal-body">${bodyHtml}</div>
+        <div class="modal-footer">
+          ${(actions || []).map(action => action.close
+            ? `<button type="button" class="${action.className || 'ghost-btn'}" data-close-modal>${escapeHtml_(action.label)}</button>`
+            : `<button type="button" class="${action.className || 'primary-btn'}" data-modal-action="${escapeHtmlAttr_(action.action)}">${escapeHtml_(action.label)}</button>`
+          ).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeModal_() {
+  document.getElementById('overlay-root').innerHTML = '';
+}
+
+function setModalBusy_(busy, label) {
+  const root = document.getElementById('overlay-root');
+  root.querySelectorAll('button, input, textarea, select').forEach(control => {
+    control.disabled = Boolean(busy);
+  });
+  const action = root.querySelector('[data-modal-action]');
+  if (!action) return;
+  if (busy) {
+    if (!action.dataset.originalText) action.dataset.originalText = action.textContent;
+    action.textContent = label || 'Saving...';
+  } else if (action.dataset.originalText) {
+    action.textContent = action.dataset.originalText;
+  }
+}
+
+function formObject_(form) {
+  const data = new FormData(form);
+  const output = {};
+  data.forEach((value, key) => {
+    output[key] = typeof value === 'string' ? value.trim() : value;
+  });
+  return output;
+}
+
+function validateForm_(form) {
+  if (!form) return false;
+  if (!form.reportValidity()) return false;
+  return true;
+}
+
+function formField_(label, control, className) {
+  return `
+    <label class="form-field ${className || ''}">
+      <span>${escapeHtml_(label)}</span>
+      ${control}
+    </label>
+  `;
+}
+
+function userSelectHtml_(name, selected) {
+  return `
+    <select name="${escapeHtmlAttr_(name)}" required>
+      ${STATE.users.map(user => `<option value="${escapeHtmlAttr_(user.UserID)}" ${String(user.UserID) === String(selected) ? 'selected' : ''}>${escapeHtml_(user.FullName || user.Email || user.UserID)}</option>`).join('')}
+    </select>
+  `;
+}
+
+function prioritySelectHtml_(name, selected) {
+  return `
+    <select name="${escapeHtmlAttr_(name)}" required>
+      ${['HIGH', 'MEDIUM', 'LOW'].map(value => `<option value="${value}" ${value === selected ? 'selected' : ''}>${statusLabel_(value)}</option>`).join('')}
+    </select>
+  `;
+}
+
+function statusSelectHtml_(name, selected, currentStatus) {
+  const statuses = allowedStatusOptions_(currentStatus);
+  return `
+    <select id="result-status" name="${escapeHtmlAttr_(name)}" required>
+      ${statuses.map(value => `<option value="${value}" ${value === selected ? 'selected' : ''}>${statusLabel_(value)}</option>`).join('')}
+    </select>
+  `;
+}
+
+function allowedStatusOptions_(currentStatus) {
+  const map = {
+    NOT_STARTED: ['NOT_STARTED', 'IN_PROGRESS', 'WAITING', 'ON_HOLD', 'COMPLETED', 'CANCELLED'],
+    IN_PROGRESS: ['IN_PROGRESS', 'WAITING', 'ON_HOLD', 'COMPLETED', 'CANCELLED'],
+    WAITING: ['WAITING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'],
+    ON_HOLD: ['ON_HOLD', 'IN_PROGRESS', 'WAITING', 'COMPLETED', 'CANCELLED']
+  };
+  return map[currentStatus] || [currentStatus];
+}
+
+function renderResultSections_(result) {
+  const sections = [
+    ['COMPLETED WORK', result.CompletedWork],
+    ['PENDING', result.PendingWork],
+    ['ISSUES / CONSTRAINTS', result.IssuesConstraints],
+    ['WAITING FOR', result.WaitingFor],
+    ['NEXT ACTION', result.NextAction]
+  ].filter(item => String(item[1] || '').trim());
+
+  if (!sections.length) return `<div class="empty-inline">No commentary was entered in this update.</div>`;
+
+  return sections.map(item => `
+    <div class="result-section">
+      <div class="result-section-label">${item[0]}</div>
+      <div class="result-section-text">${nl2br_(item[1])}</div>
+    </div>
+  `).join('') + (result.NextActionDue ? `
+    <div class="result-section">
+      <div class="result-section-label">NEXT ACTION DUE</div>
+      <div class="result-section-text">${escapeHtml_(formatDate_(result.NextActionDue))}</div>
+    </div>
+  ` : '') + (result.FollowUpDate ? `
+    <div class="result-section">
+      <div class="result-section-label">FOLLOW-UP</div>
+      <div class="result-section-text">${escapeHtml_(formatDate_(result.FollowUpDate))}</div>
+    </div>
+  ` : '');
+}
+
+function historyItem_(result) {
+  return `
+    <details class="timeline-item">
+      <summary>
+        <div>
+          <div class="timeline-date">${escapeHtml_(formatDate_(result.UpdateDate))}</div>
+          <div class="timeline-title">${escapeHtml_(statusLabel_(result.StatusBefore))} -> ${escapeHtml_(statusLabel_(result.StatusAfter))}</div>
+        </div>
+        <div class="timeline-progress">${Number(result.ProgressBefore) || 0}% -> ${Number(result.ProgressAfter) || 0}%</div>
+      </summary>
+      <div class="timeline-detail">${renderResultSections_(result)}${result.ProgressChangeReason ? `<div class="result-section"><div class="result-section-label">PROGRESS CHANGE REASON</div><div class="result-section-text">${nl2br_(result.ProgressChangeReason)}</div></div>` : ''}</div>
+    </details>
+  `;
+}
+
+function infoRow_(label, value) {
+  return `<div class="info-row"><span>${escapeHtml_(label)}</span><strong>${escapeHtml_(value)}</strong></div>`;
+}
+
+function hero_(kicker, value, subtitle, stats) {
+  return `
+    <div class="hero-panel">
+      <div class="hero-lead">
+        <div class="hero-kicker">${escapeHtml_(kicker)}</div>
+        <div class="hero-value">${escapeHtml_(value)}</div>
+        <div class="hero-subtitle">${escapeHtml_(subtitle)}</div>
+      </div>
+      ${(stats || []).map(stat => `
+        <div class="hero-stat">
+          <div class="hero-stat-label">${escapeHtml_(stat.label)}</div>
+          <div class="hero-stat-value">${escapeHtml_(stat.value)}</div>
+          <div class="hero-stat-note">${escapeHtml_(stat.note)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function metric_(label, value, note) {
+  return `
+    <div class="metric-card">
+      <div class="metric-label">${escapeHtml_(label)}</div>
+      <div class="metric-value">${escapeHtml_(value)}</div>
+      <div class="metric-note">${escapeHtml_(note)}</div>
+    </div>
+  `;
+}
+
+function panelHeader_(kicker, title, meta) {
+  return `
+    <div class="panel-header">
+      <div>
+        <div class="panel-kicker">${escapeHtml_(kicker)}</div>
+        <h2 class="panel-title">${escapeHtml_(title)}</h2>
+      </div>
+      <div class="panel-meta">${escapeHtml_(meta)}</div>
+    </div>
+  `;
+}
+
+function projectCard_(project) {
+  const healthClass = project.health === 'ON TRACK' ? 'badge-success' : 'badge-warning';
+  return `
+    <div class="project-card">
+      <div class="project-top">
+        <div>
+          <div class="project-title">${escapeHtml_(project.name)}</div>
+          <div class="project-context">${escapeHtml_(project.code)} - ${escapeHtml_(project.status)}</div>
+        </div>
+        <span class="badge ${healthClass}">${escapeHtml_(project.health)}</span>
+      </div>
+      <div class="progress-row">
+        <div class="progress-track"><div class="progress-fill" style="width:${Number(project.progress) || 0}%"></div></div>
+        <div class="progress-value">${Number(project.progress) || 0}%</div>
+      </div>
+      <div class="project-summary-grid">
+        <div class="project-summary-item"><div class="project-summary-label">Target</div><div class="project-summary-value">${escapeHtml_(project.target)}</div></div>
+        <div class="project-summary-item"><div class="project-summary-label">Work Items</div><div class="project-summary-value">${escapeHtml_(project.completed)}</div></div>
+        <div class="project-summary-item"><div class="project-summary-label">Next Milestone</div><div class="project-summary-value">${escapeHtml_(project.milestone)}</div></div>
+      </div>
+      <div class="next-action"><div class="next-action-label">NEXT MAJOR ACTION</div><div class="next-action-text">${escapeHtml_(project.next)}</div></div>
+    </div>
+  `;
+}
+
+function renderLoading_(text) {
+  return `<div class="loading-card"><div class="spinner"></div><div>${escapeHtml_(text || 'Loading...')}</div></div>`;
+}
+
+function showPageLoading_(text) {
+  document.getElementById('page-content').innerHTML = renderLoading_(text);
+}
+
+function showToast_(message, tone) {
+  const root = document.getElementById('toast-root');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tone || 'info'}`;
+  toast.textContent = message;
+  root.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 220);
+  }, 3400);
+}
+
+function serverCall_(name, ...args) {
+  return new Promise((resolve, reject) => {
+    const runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(error => reject(new Error(error && error.message ? error.message : String(error))));
+    runner[name](...args);
+  });
+}
+
+function isTaskActive_(task) {
+  return !['COMPLETED', 'CANCELLED'].includes(String(task.Status || ''));
+}
+
+function statusLabel_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .split('_')
+    .map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : '')
+    .join(' ');
+}
+
+function statusBadgeClass_(status) {
+  if (status === 'COMPLETED') return 'badge-success';
+  if (status === 'WAITING' || status === 'ON_HOLD') return 'badge-warning';
+  if (status === 'CANCELLED') return 'badge-neutral';
+  return 'badge-info';
+}
+
+function priorityBadgeClass_(priority) {
+  if (priority === 'HIGH') return 'badge-danger';
+  if (priority === 'MEDIUM') return 'badge-warning';
+  return 'badge-neutral';
+}
+
+function userName_(userId) {
+  const user = STATE.users.find(item => String(item.UserID) === String(userId));
+  return user ? (user.FullName || user.Email || user.UserID) : (userId || '-');
+}
+
+function formatDate_(iso) {
+  if (!iso) return '-';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!match) return String(iso);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${Number(match[3])} ${months[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+function nl2br_(value) {
+  return escapeHtml_(value).replace(/\n/g, '<br>');
+}
+
+function escapeHtml_(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeHtmlAttr_(value) {
+  return escapeHtml_(value).replace(/`/g, '&#096;');
+}
+</script>

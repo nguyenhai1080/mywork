@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071d36">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-wrap">
+      <div class="brand-mark">MW</div>
+      <div class="brand-copy">
+        <div class="brand-name">MyWork</div>
+        <div class="brand-tagline">Plan • Execute • Deliver</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="Primary navigation">
+      <button class="nav-item active" data-page="my-work" type="button">
+        <span class="nav-icon">⌂</span>
+        <span class="nav-label">My Work</span>
+      </button>
+      <button class="nav-item" data-page="tasks" type="button">
+        <span class="nav-icon">✓</span>
+        <span class="nav-label">Tasks</span>
+      </button>
+      <button class="nav-item" data-page="projects" type="button">
+        <span class="nav-icon">▦</span>
+        <span class="nav-label">Projects</span>
+      </button>
+      <button class="nav-item" data-page="dashboard" type="button">
+        <span class="nav-icon">◫</span>
+        <span class="nav-label">Dashboard</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-footer">
+      <button class="nav-item footer-link" type="button">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Settings</span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <div class="version-block">
+        <strong>MyWork v1.0 DEV</strong>
+        <span>Task + Project baseline</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Toggle menu">☰</button>
+        <div>
+          <div class="eyebrow">MYWORK · PLAN · EXECUTE · DELIVER</div>
+          <h1 id="page-title">My Work</h1>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="context-box desktop-only">
+          <span class="context-label">WORKSPACE</span>
+          <select id="workspace-select" aria-label="Workspace">
+            <option>Personal Work</option>
+          </select>
+        </div>
+
+        <div class="context-box desktop-only">
+          <span class="context-label">VIEW</span>
+          <select id="view-select" aria-label="View">
+            <option>Current</option>
+          </select>
+        </div>
+
+        <div class="add-wrap">
+          <button class="primary-btn" id="add-btn" type="button">+ Add</button>
+          <div class="add-menu hidden" id="add-menu">
+            <button type="button" data-action="new-task">New Task</button>
+            <button type="button" data-action="new-project">New Project</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section id="page-content" class="page-content"></section>
+  </main>
+</div>
+
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div id="overlay-root"></div>
+<div id="toast-root" class="toast-root"></div>
+
+<?!= include('AppJS'); ?>
+
+</body>
+</html>
