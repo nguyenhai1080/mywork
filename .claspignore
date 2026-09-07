@@ -1,0 +1,6 @@
+.git/**
+.github/**
+docs/**
+*.md
+*.zip
+node_modules/**
