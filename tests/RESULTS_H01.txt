@@ -1,0 +1,16 @@
+PASS syntax: all GS and AppJS
+PASS camelCase persists with reordered headers and API read-back
+PASS audit records both dates with before/after
+PASS partial due update validates against existing assigned
+PASS partial assigned update validates against existing due
+PASS equal dates accepted
+PASS empty, invalid and malformed dates rejected
+PASS unknown header fails before any writes
+PASS duplicate header rejected
+PASS ignored write fails verification and rolls back
+PASS audit failure rolls task back
+PASS unchanged date has no duplicate date audit
+PASS missing task fails
+PASS empty payload rejected before write
+14 tests passed; Sheets mocked. Live deployment checks remain required.
+PASS reproduces empty payload before fix; fixed Save sends both dates (disabled-control FormData mock).

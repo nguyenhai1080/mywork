@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#071d36">
+  <meta name="theme-color" content="#0b2340">
   <?!= include('Styles'); ?>
 </head>
 <body>
@@ -63,20 +63,7 @@
       </div>
 
       <div class="topbar-actions">
-        <div class="context-box desktop-only">
-          <span class="context-label">WORKSPACE</span>
-          <select id="workspace-select" aria-label="Workspace">
-            <option>Personal Work</option>
-          </select>
-        </div>
-
-        <div class="context-box desktop-only">
-          <span class="context-label">VIEW</span>
-          <select id="view-select" aria-label="View">
-            <option>Current</option>
-          </select>
-        </div>
-
+        <button class="topbar-icon-btn" id="refresh-page-btn" type="button" title="Refresh">↻</button>
         <div class="add-wrap">
           <button class="primary-btn" id="add-btn" type="button">+ Add</button>
           <div class="add-menu hidden" id="add-menu">
@@ -92,6 +79,8 @@
 </div>
 
 <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div id="task-drawer-backdrop" class="task-drawer-backdrop"></div>
+<aside id="task-drawer" class="task-drawer" aria-hidden="true"></aside>
 <div id="overlay-root"></div>
 <div id="toast-root" class="toast-root"></div>
 

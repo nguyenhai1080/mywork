@@ -19,8 +19,12 @@ function auditChangesLocked_(entityType, entityId, action, oldRecord, newRecord,
   const changed = [];
 
   (fields || []).forEach(field => {
-    const oldValue = oldRecord ? oldRecord[field] : '';
-    const newValue = newRecord ? newRecord[field] : '';
+    const oldRaw = oldRecord ? oldRecord[field] : '';
+    const newRaw = newRecord ? newRecord[field] : '';
+    // Date-only fields compare calendar dates, avoiding midnight/noon false changes.
+    const dateOnly = field === 'AssignedDate' || field === 'DueDate';
+    const oldValue = dateOnly ? toIsoDate_(oldRaw) : oldRaw;
+    const newValue = dateOnly ? toIsoDate_(newRaw) : newRaw;
 
     if (!auditValuesEqual_(oldValue, newValue)) {
       auditRecordLocked_(entityType, entityId, action, field, oldValue, newValue, userId, operationId);

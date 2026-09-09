@@ -1,0 +1,19 @@
+PASS MW01 overdue
+PASS MW02 follow-up today
+PASS MW03 follow-up overdue
+PASS MW04 next action overdue
+PASS MW05 due today
+PASS MW06 next action today
+PASS MW07 upcoming boundaries
+PASS MW08 waiting future or absent follow-up
+PASS MW09 waiting due only once
+PASS MW10 completed hidden
+PASS MW11 cancelled hidden
+PASS MW12 project context
+PASS MW13 multiple reasons, one section
+PASS MW14 reload aggregation reclassifies changed record
+PASS MW15 timezone date near UTC midnight
+PASS archived and other owner excluded
+PASS high priority due soon escalates per existing rule
+PASS waiting with near due follows classification precedence
+18 My Work logic tests passed. Mock data only; browser interaction remains manual.

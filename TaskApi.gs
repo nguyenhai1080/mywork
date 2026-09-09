@@ -21,7 +21,12 @@ function apiCreateTask(payload) {
 }
 
 function apiUpdateTaskMetadata(taskId, payload) {
-  return updateTaskMetadata_(taskId, payload || {}, ensureCurrentUser_());
+  // The service returns the repository read-back while holding the update lock.
+  const result = updateTaskMetadata_(taskId, payload || {}, ensureCurrentUser_());
+  if (!result.task || String(result.task.TaskID) !== String(taskId)) {
+    throw new Error('Updated task could not be verified.');
+  }
+  return { success: true, task: result.task, operationId: result.operationId };
 }
 
 function apiAddTaskResult(taskId, payload) {
