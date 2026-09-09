@@ -283,3 +283,6 @@ None.
 
 ## Productivity UI v2
 PR03 UI was refactored to a lighter, denser task-management workspace. Backend and Google Sheets schema are unchanged.
+
+## PR04 Project Core
+Live Projects, WBS task/subtask and weighted progress. See CHANGELOG_PR04.md for calculation rules, scope and DEV acceptance. Migration: NONE.

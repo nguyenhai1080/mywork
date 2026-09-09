@@ -9,6 +9,8 @@ const PAGE_TITLES = {
 const STATE = {
   page: 'my-work',
   tasks: [],
+  projects: [],
+  projectDetail: null,
   users: [],
   currentUser: null,
   today: '',
@@ -55,7 +57,7 @@ async function init_() {
   navigateTo('my-work');
 
   try {
-    await Promise.all([loadTaskBootstrap_(), loadMyWorkData_()]);
+    await Promise.all([loadTaskBootstrap_(), loadMyWorkData_(), loadProjects_()]);
     renderCurrentPage_();
   } catch (error) {
     showToast_(error.message || String(error), 'error');
@@ -89,7 +91,7 @@ function bindHeader_() {
       if (button.dataset.action === 'new-task') {
         openNewTaskModal_();
       } else {
-        showToast_('Project creation will be connected in PR04.', 'info');
+        openProjectModal_();
       }
     });
   });
@@ -114,6 +116,12 @@ function bindPageDelegation_() {
     const action = button.dataset.action;
     const taskId = button.dataset.taskId;
 
+    if (action === 'new-project') openProjectModal_();
+    if (action === 'open-project') openProject_(button.dataset.projectId);
+    if (action === 'edit-project') openProjectModal_(STATE.projectDetail.project);
+    if (action === 'back-projects') { STATE.projectDetail=null; renderCurrentPage_(); }
+    if (action === 'project-task') openProjectTaskModal_(button.dataset.parentId||'');
+    if (action === 'edit-wbs') openWbsModal_(taskId);
     if (action === 'new-task') openNewTaskModal_();
     if (action === 'open-task') openTaskDetail_(taskId);
     if (action === 'back-tasks') {
@@ -162,6 +170,9 @@ function bindOverlayDelegation_() {
     if (!actionButton) return;
 
     const action = actionButton.dataset.modalAction;
+    if (action === 'save-project') submitProject_();
+    if (action === 'save-project-task') submitProjectTask_();
+    if (action === 'save-wbs') submitWbs_();
     if (action === 'save-new-task') submitNewTask_();
     if (action === 'save-edit-task') submitEditTask_();
     if (action === 'save-task-result') submitTaskResult_();
@@ -237,6 +248,8 @@ async function refreshTasks_() {
     ]);
     STATE.tasks = results[0] || [];
     STATE.myWork = results[1] || null;
+    await loadProjects_();
+    if (STATE.projectDetail) STATE.projectDetail=await serverCall_('apiGetProject',STATE.projectDetail.project.ProjectID);
   } finally {
     STATE.loadingTasks = false;
   }
@@ -525,7 +538,7 @@ function renderTaskDetail_(detail) {
   `;
 }
 
-function renderProjects_() {
+function renderProjectsLegacy_() {
   return `
     ${hero_('PROJECT PORTFOLIO', '2', 'demo projects until PR04', [
       { label: 'On track', value: '1', note: 'Demo data' },
@@ -1400,14 +1413,14 @@ function renderTaskDrawerV2_(detail) {
 
 function drawerFieldV2_(name,value) { return `<div><div class="drawer-field-name-v2">${escapeHtml_(name)}</div><div class="drawer-field-value-v2">${escapeHtml_(value==null?'—':String(value))}</div></div>`; }
 
-function renderProjects_() {
-  return `<div class="compact-summary-v2">${compactStatV2_('Projects',DEMO_PROJECTS.length)}${compactStatV2_('On track',DEMO_PROJECTS.filter(p=>p.health==='ON TRACK').length)}${compactStatV2_('Attention',DEMO_PROJECTS.filter(p=>p.health==='ATTENTION').length,true)}</div><div class="project-list-v2">${DEMO_PROJECTS.map(projectRowV2_).join('')}</div>`;
+function renderProjectsLegacy_() {
+  return `<div class="compact-summary-v2">${compactStatV2_('Projects',DEMO_PROJECTS.length)}${compactStatV2_('On track',DEMO_PROJECTS.filter(p=>p.health==='ON TRACK').length)}${compactStatV2_('Attention',DEMO_PROJECTS.filter(p=>p.health==='ATTENTION').length,true)}</div><div class="project-list-v2">${STATE.projects.map(projectRowLive_).join('')}</div>`;
 }
 function projectRowV2_(p) { return `<div class="project-row-v2"><div class="project-row-top-v2"><div><div class="project-name-v2">${escapeHtml_(p.name)}</div><div class="project-meta-v2">${escapeHtml_(p.status)} · ${escapeHtml_(p.health)} · Target ${escapeHtml_(p.target)}</div></div><div class="project-percent-v2">${Number(p.progress)||0}%</div></div><div class="project-progress-v2"><div class="project-progress-fill-v2" style="width:${Number(p.progress)||0}%"></div></div><div class="project-footer-v2"><span>${escapeHtml_(p.completed)} work items</span><span>Next: ${escapeHtml_(p.next)}</span></div></div>`; }
 
 function renderDashboard_() {
   const active=STATE.tasks.filter(isTaskActive_).length, overdue=STATE.tasks.filter(t=>t.IsOverdue).length, waiting=STATE.tasks.filter(t=>t.Status==='WAITING').length, completed=STATE.tasks.filter(t=>t.Status==='COMPLETED').length;
-  return `<div class="dashboard-summary-v2">${dashboardCardV2_('Active Tasks',active,'Current work')}${dashboardCardV2_('Overdue',overdue,'Needs attention')}${dashboardCardV2_('Waiting',waiting,'External dependency')}${dashboardCardV2_('Completed',completed,'All completed tasks')}</div><div class="panel section-stack">${panelHeader_('PROJECTS','Project Overview','PR04 will connect live project data')}<div class="project-list-v2">${DEMO_PROJECTS.map(projectRowV2_).join('')}</div></div>`;
+  return `<div class="dashboard-summary-v2">${dashboardCardV2_('Active Tasks',active,'Current work')}${dashboardCardV2_('Overdue',overdue,'Needs attention')}${dashboardCardV2_('Waiting',waiting,'External dependency')}${dashboardCardV2_('Completed',completed,'All completed tasks')}</div><div class="panel section-stack">${panelHeader_('PROJECTS','Project Overview','Live project progress')}<div class="project-list-v2">${STATE.projects.map(projectRowLive_).join('')}</div></div>`;
 }
 function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card-v2"><div class="label">${escapeHtml_(label)}</div><div class="value">${Number(value)||0}</div><div class="note">${escapeHtml_(note)}</div></div>`; }
 
@@ -1420,5 +1433,28 @@ function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card
     catch(error){ showToast_(error.message||String(error),'error'); }
   });
 })();
+
+
+async function loadProjects_(){ STATE.projects=await serverCall_('apiListProjects'); }
+async function openProject_(id){try{STATE.projectDetail=await serverCall_('apiGetProject',id);STATE.page='projects';renderCurrentPage_();}catch(e){showToast_(e.message,'error');}}
+function projectRowLive_(p){return '<div class="project-row-v2"><button class="table-link" data-action="open-project" data-project-id="'+escapeHtmlAttr_(p.ProjectID)+'">'+escapeHtml_(p.ProjectName)+'</button><div class="project-meta-v2">'+escapeHtml_(p.ProjectID)+' · '+escapeHtml_(statusLabel_(p.Status))+' · Target '+formatDate_(p.TargetDate)+'</div><div class="project-percent-v2">'+Number(p.Progress)+'%</div><div class="project-progress-v2"><div class="project-progress-fill-v2" style="width:'+Number(p.Progress)+'%"></div></div></div>';}
+function renderProjects_(){
+ if(!STATE.projectDetail)return '<div class="productivity-toolbar-v2"><h2>Projects · '+STATE.projects.length+'</h2><button class="primary-btn" data-action="new-project">+ New Project</button></div><div class="project-list-v2">'+(STATE.projects.map(projectRowLive_).join('')||'<div class="empty-compact-v2">No projects yet. Create your first project.</div>')+'</div>';
+ const d=STATE.projectDetail,p=d.project;
+ return '<div class="productivity-toolbar-v2"><button class="ghost-btn" data-action="back-projects">← Projects</button><button class="secondary-btn" data-action="edit-project">Edit Project</button><button class="primary-btn" data-action="project-task">+ Task</button></div><h2>'+escapeHtml_(p.ProjectName)+'</h2><div class="compact-summary-v2">'+compactStatV2_('Progress (%)',Number(p.Progress))+compactStatV2_('Work items',d.tasks.length)+'</div><p>'+escapeHtml_(p.Objective||p.Description||'')+'</p><p>Owner: '+escapeHtml_(userName_(p.OwnerID))+' · Target: '+formatDate_(p.TargetDate)+'</p><h3>Work breakdown</h3><p class="work-context">Parent progress comes from its children. Weight sets each item’s share among siblings.</p><div class="pr04-wbs">'+(d.tasks.map(t=>'<div class="pr04-wbs-row"><div style="padding-left:'+Math.min(t.Depth*18,180)+'px"><button class="table-link" data-action="open-task" data-task-id="'+escapeHtmlAttr_(t.TaskID)+'">'+escapeHtml_(t.WbsCode+' '+t.TaskTitle)+'</button><div class="work-context">'+escapeHtml_(t.TaskID)+' · '+(t.IsSummary?'Summary':escapeHtml_(statusLabel_(t.Status)))+'</div></div><div>'+Number(t.CalculatedProgress)+'%</div><div>'+formatDate_(t.DueDate)+'</div><div>Weight '+Number(t.Weight||1)+'</div><div><button class="ghost-btn" data-action="project-task" data-parent-id="'+escapeHtmlAttr_(t.TaskID)+'">+ Subtask</button><button class="ghost-btn" data-action="edit-wbs" data-task-id="'+escapeHtmlAttr_(t.TaskID)+'">Structure</button></div></div>').join('')||'<div class="empty-compact-v2">Add a task to start planning.</div>')+'</div>';
+}
+function openProjectModal_(p){
+ p=p||{};STATE.editingProjectId=p.ProjectID||'';
+ showModal_(p.ProjectID?'Edit Project':'New Project','<form id="project-form" class="form-stack" onsubmit="return false;">'+formField_('Project Name *','<input name="projectName" required maxlength="500" value="'+escapeHtmlAttr_(p.ProjectName||'')+'">')+formField_('Objective','<textarea name="objective">'+escapeHtml_(p.Objective||'')+'</textarea>')+formField_('Description','<textarea name="description">'+escapeHtml_(p.Description||'')+'</textarea>')+formField_('Expected Output','<textarea name="expectedOutput">'+escapeHtml_(p.ExpectedOutput||'')+'</textarea>')+formField_('Owner *',userSelectHtml_('ownerId',p.OwnerID||(STATE.currentUser||{}).UserID))+formField_('Sponsor','<input name="sponsor" value="'+escapeHtmlAttr_(p.Sponsor||'')+'">')+formField_('Priority',prioritySelectHtml_('priority',p.Priority||'MEDIUM'))+'<div class="form-grid-2">'+formField_('Start Date *','<input type="date" name="startDate" required value="'+escapeHtmlAttr_(p.StartDate||STATE.today)+'">')+formField_('Target Date *','<input type="date" name="targetDate" required value="'+escapeHtmlAttr_(p.TargetDate||'')+'">')+'</div></form>',[{label:'Cancel',className:'ghost-btn',close:true},{label:'Save Project',className:'primary-btn',action:'save-project'}]);
+}
+async function submitProject_(){const f=document.getElementById('project-form');if(!validateForm_(f))return;const input=formObject_(f),id=STATE.editingProjectId;setModalBusy_(true,'Saving...');try{const r=id?await serverCall_('apiUpdateProject',id,input):await serverCall_('apiCreateProject',input);closeModal_();await loadProjects_();await openProject_(r.project.ProjectID);showToast_('Project saved.','success');}catch(e){setModalBusy_(false);showToast_(e.message,'error');}}
+function projectParentSelect_(selected,exclude){return '<select name="parentTaskId"><option value="">Top-level task</option>'+STATE.projectDetail.tasks.filter(t=>t.TaskID!==exclude&&!['COMPLETED','CANCELLED'].includes(t.Status)).map(t=>'<option value="'+escapeHtmlAttr_(t.TaskID)+'" '+(t.TaskID===selected?'selected':'')+'>'+escapeHtml_(t.WbsCode+' '+t.TaskTitle)+'</option>').join('')+'</select>';}
+function openProjectTaskModal_(parent){
+ const p=STATE.projectDetail.project;
+ showModal_('New Project Task','<form id="project-task-form" class="form-stack" onsubmit="return false;">'+formField_('Task Title *','<input name="taskTitle" required maxlength="500">')+formField_('Parent',projectParentSelect_(parent))+formField_('Weight *','<input name="weight" type="number" min="0.01" step="any" value="1" required>')+formField_('Owner *',userSelectHtml_('ownerId',p.OwnerID))+formField_('Priority',prioritySelectHtml_('priority','MEDIUM'))+'<div class="form-grid-2">'+formField_('Assigned Date *','<input name="assignedDate" type="date" required value="'+escapeHtmlAttr_(STATE.today)+'">')+formField_('Due Date *','<input name="dueDate" type="date" required value="'+escapeHtmlAttr_(p.TargetDate)+'">')+'</div>'+formField_('Expected Output','<textarea name="expectedOutput"></textarea>')+'</form>',[{label:'Cancel',className:'ghost-btn',close:true},{label:'Create Task',className:'primary-btn',action:'save-project-task'}]);
+}
+async function submitProjectTask_(){const f=document.getElementById('project-task-form');if(!validateForm_(f))return;const input=formObject_(f);input.projectId=STATE.projectDetail.project.ProjectID;setModalBusy_(true,'Creating...');try{await serverCall_('apiCreateTask',input);closeModal_();await refreshTasks_();renderCurrentPage_();showToast_('Project task created.','success');}catch(e){setModalBusy_(false);showToast_(e.message,'error');}}
+function openWbsModal_(id){const t=STATE.projectDetail.tasks.find(t=>t.TaskID===id);STATE.editingWbsId=id;showModal_('Task Structure','<form id="wbs-form" class="form-stack" onsubmit="return false;">'+formField_('Parent',projectParentSelect_(t.ParentTaskID,id))+formField_('Weight *','<input name="weight" type="number" min="0.01" step="any" required value="'+Number(t.Weight||1)+'">')+formField_('Sort Order','<input name="sortOrder" type="number" value="'+Number(t.SortOrder||0)+'">')+'</form>',[{label:'Cancel',className:'ghost-btn',close:true},{label:'Save',className:'primary-btn',action:'save-wbs'}]);}
+async function submitWbs_(){const f=document.getElementById('wbs-form');if(!validateForm_(f))return;const input=formObject_(f);setModalBusy_(true,'Saving...');try{await serverCall_('apiUpdateTaskWbs',STATE.editingWbsId,input);closeModal_();await refreshTasks_();renderCurrentPage_();showToast_('Task structure saved.','success');}catch(e){setModalBusy_(false);showToast_(e.message,'error');}}
 
 </script>

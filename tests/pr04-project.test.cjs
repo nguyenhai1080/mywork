@@ -1,0 +1,40 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const dir=path.resolve(__dirname,'..'),c=vm.createContext({console});
+for(const f of fs.readdirSync(dir).filter(f=>f.endsWith('.gs')))new vm.Script(fs.readFileSync(path.join(dir,f),'utf8'),{filename:f});
+new vm.Script(fs.readFileSync(path.join(dir,'AppJS.html'),'utf8').replace(/<\/?script[^>]*>/g,''));
+for(const f of ['Config.gs','Db.gs','TaskRepository.gs','TaskService.gs','AuditService.gs','ProjectRepository.gs','ProjectService.gs','ProjectApi.gs'])vm.runInContext(fs.readFileSync(path.join(dir,f),'utf8'),c);
+vm.runInContext(`
+var Session={getScriptTimeZone:()=> 'Asia/Ho_Chi_Minh'},Utilities={formatDate:d=>d.toISOString().slice(0,10)},SpreadsheetApp={flush:()=>{}};
+var lockCount=0;var LockService={getScriptLock:()=>({waitLock:()=>lockCount++,releaseLock:()=>lockCount--})};
+ensureCurrentUser_=()=>({UserID:'U1'});listActiveUsers_=()=>[{UserID:'U1'}];todayIso_=()=> '2026-09-09';getSettingValue_=()=>3;
+var ph=['ProjectID','ProjectName','Description','Objective','ExpectedOutput','OwnerID','Sponsor','StartDate','TargetDate','CompletedDate','Priority','Status','Progress','SystemHealth','OwnerHealth','HealthOverrideReason','NextMajorAction','NextActionDue','CompletionReason','IsArchived','CreatedBy','CreatedAt','UpdatedAt'];
+var rows=[],logs=[],tasks=[],failAudit=false;
+getSheet_=name=>name==='90_AUDIT_LOG'?{getLastRow:()=>logs.length+1}:{getLastRow:()=>rows.length+1,getLastColumn:()=>ph.length,getRange:(r,col,n=1,w=1)=>({getValues:()=>r===1?(n===1?[ph.slice(col-1,col-1+w)]:[ph,...rows]):[rows[r-2].slice(col-1,col-1+w)],setValue:v=>rows[r-2][col-1]=v,setValues:v=>rows[r-2]=v[0].slice()})};
+appendRecord_=(name,record)=>{if(name==='90_AUDIT_LOG'){if(failAudit)throw Error('audit failed');logs.push(record);return logs.length+1;}rows.push(ph.map(k=>record[k]===undefined?'':record[k]));return rows.length+1;};
+nextIdLocked_=entity=>entity==='PROJECT'?'P'+(rows.length+1):'A'+logs.length;newOperationId_=()=> 'OP';
+deleteRowSafe_=(name,row)=>rows.splice(row-2,1);deleteRowsAfter_=(name,safe)=>logs.length=safe-1;
+projectRepoList_=()=>rows.map(r=>rowToObject_(ph,r));taskRepoList_=()=>tasks;
+taskRepoFind_=id=>{const t=tasks.find(t=>t.TaskID===id);return t?{record:t}:null;};
+function task(id,progress,weight,parent){return {TaskID:id,ProjectID:'P1',Status:'IN_PROGRESS',Progress:progress,Weight:weight,ParentTaskID:parent||'',DueDate:'2026-09-30',Priority:'MEDIUM'};}
+`,c);
+let passed=0;function run(s){return vm.runInContext(s,c);}function test(n,fn){fn();passed++;console.log('PASS '+n);}
+test('create project persists and audits',()=>{const r=run("apiCreateProject({projectName:'Alpha',startDate:'2026-09-09',targetDate:'2026-09-30'})");assert.equal(r.project.ProjectID,'P1');assert.equal(run('logs.length'),1);assert.equal(run('lockCount'),0);});
+test('edit dates persists and validates partial update',()=>{run("apiUpdateProject('P1',{targetDate:'2026-10-01'})");assert.equal(run("getProject_('P1').project.TargetDate"),'2026-10-01');assert.throws(()=>run("apiUpdateProject('P1',{targetDate:'2026-09-01'})"),/earlier/);});
+test('audit failure rolls back project creation',()=>{run('failAudit=true');assert.throws(()=>run("apiCreateProject({projectName:'Beta',startDate:'2026-09-09',targetDate:'2026-09-30'})"),/audit failed/);assert.equal(run('rows.length'),1);run('failAudit=false');});
+test('audit failure rolls back project edit',()=>{run('failAudit=true');assert.throws(()=>run("apiUpdateProject('P1',{projectName:'Wrong'})"),/audit failed/);assert.equal(run("projectRepoFind_('P1').record.ProjectName"),'Alpha');run('failAudit=false');});
+test('required name dates owner',()=>{for(const p of [{projectName:''},{targetDate:''},{ownerId:'missing'},{targetDate:'2026-02-30'}])assert.throws(()=>run("apiUpdateProject('P1',"+JSON.stringify(p)+')'));});
+test('weighted siblings 1:3',()=>assert.equal(run("projectWbs_([task('A',100,1),task('B',0,3)]).progress"),25));
+test('nested WBS does not double-count parent progress',()=>assert.equal(run("projectWbs_([task('A',99,2),task('B',0,1),task('C',100,1,'A'),task('D',0,1,'A')]).progress"),33.33));
+test('default blank weight is one',()=>assert.equal(run("projectWbs_([task('A',100,''),task('B',0,'')]).progress"),50));
+test('empty project is zero',()=>assert.equal(run('projectWbs_([]).progress'),0));
+test('cancelled and archived excluded',()=>assert.equal(run("projectWbs_([task('A',100,1),Object.assign(task('B',0,9),{Status:'CANCELLED'}),Object.assign(task('C',0,9),{IsArchived:true})]).progress"),100));
+test('completed leaf is 100',()=>assert.equal(run("projectWbs_([Object.assign(task('A',0,1),{Status:'COMPLETED'})]).progress"),100));
+test('cycles rejected',()=>assert.throws(()=>run("projectWbs_([task('A',0,1,'B'),task('B',0,1,'A')])"),/cycle/));
+test('orphan rejected',()=>assert.throws(()=>run("projectWbs_([task('A',0,1,'missing')])"),/parent not found/));
+test('invalid weight rejected',()=>{for(const w of [0,-1,'bad'])assert.throws(()=>run("projectWbs_([task('A',0,"+JSON.stringify(w)+')])'),/weight/);});
+test('WBS order and depth',()=>{const r=run("projectWbs_([task('A',0,1),task('B',0,1,'A')]).rows");assert.equal(r[1].WbsCode,'1.1');assert.equal(r[1].Depth,1);});
+test('parent from other project rejected',()=>{run("tasks=[Object.assign(task('A',0,1),{ProjectID:'OTHER'})]");assert.throws(()=>run("validateProjectTaskLink_('P1','A','',1)"),/same project/);});
+test('moving parent beneath descendant rejected',()=>{run("tasks=[task('A',0,1),task('B',0,1,'A')]");assert.throws(()=>run("validateProjectTaskLink_('P1','B','A',1)"),/ancestor/);});
+test('valid parent accepted',()=>run("validateProjectTaskLink_('P1','A','',1)"));
+test('project progress reads changed task data',()=>{run("tasks=[task('A',0,1)]");assert.equal(run("apiGetProject('P1').project.Progress"),0);run('tasks[0].Progress=75');assert.equal(run("apiGetProject('P1').project.Progress"),75);});
+console.log(passed+' PR04 tests passed (mock Sheet).');

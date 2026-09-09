@@ -11,6 +11,8 @@ function createTask_(payload, actor) {
   const auditSafeRow = auditSheet.getLastRow();
 
   try {
+    if (input.ProjectID) validateProjectTaskLink_(input.ProjectID,input.ParentTaskID,'',input.Weight);
+    else if (input.ParentTaskID || input.SourceType === MYWORK.TASK_SOURCE.PROJECT) throw new Error('Project is required for a project task.');
     const now = new Date();
     const operationId = newOperationId_();
     const taskId = nextIdLocked_('TASK');
@@ -473,7 +475,7 @@ function validateCreateTaskInput_(payload, actor) {
   return {
     TaskTitle: title,
     Description: String(payload.description || '').trim(),
-    SourceType: String(payload.sourceType || MYWORK.TASK_SOURCE.MANUAL),
+    SourceType: payload.projectId ? MYWORK.TASK_SOURCE.PROJECT : String(payload.sourceType || MYWORK.TASK_SOURCE.MANUAL),
     ProjectID: String(payload.projectId || '').trim(),
     ParentTaskID: String(payload.parentTaskId || '').trim(),
     OwnerID: ownerId,
@@ -483,7 +485,7 @@ function validateCreateTaskInput_(payload, actor) {
     DueDate: dueDate,
     Priority: priority,
     ExpectedOutput: String(payload.expectedOutput || '').trim(),
-    Weight: payload.weight === '' || payload.weight === null || typeof payload.weight === 'undefined' ? '' : Number(payload.weight),
+    Weight: payload.weight === '' || payload.weight === null || typeof payload.weight === 'undefined' ? (payload.projectId ? 1 : '') : Number(payload.weight),
     SortOrder: payload.sortOrder === '' || payload.sortOrder === null || typeof payload.sortOrder === 'undefined' ? 0 : Number(payload.sortOrder),
     NextAction: String(payload.nextAction || '').trim(),
     NextActionDue: nextActionDue,
