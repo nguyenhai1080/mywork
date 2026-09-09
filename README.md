@@ -250,3 +250,36 @@ PR03 will implement the My Work engine:
 - Follow-up trigger
 - Next Action trigger
 - de-duplication between sections
+
+---
+
+## PR03 - My Work
+
+PR03 adds a live daily work view without changing the Google Sheets schema.
+
+### New backend
+- `MyWorkService.gs`
+- `MyWorkApi.gs`
+
+### My Work sections
+- Need Attention
+- Today
+- Upcoming (next 7 days)
+- Waiting
+
+### Deployment from Git/clasp
+On branch `feature/pr03-my-work`:
+
+```powershell
+clasp status
+clasp push
+```
+
+Redeploy the Web App as a new version after testing the script project.
+
+### Migration
+None.
+
+
+## Productivity UI v2
+PR03 UI was refactored to a lighter, denser task-management workspace. Backend and Google Sheets schema are unchanged.

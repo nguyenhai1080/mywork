@@ -15,7 +15,9 @@ const STATE = {
   taskFilter: 'ACTIVE',
   taskSearch: '',
   currentTaskDetail: null,
-  loadingTasks: false
+  loadingTasks: false,
+  myWork: null,
+  myWorkView: 'THIS_WEEK'
 };
 
 const DEMO_PROJECTS = [
@@ -53,7 +55,7 @@ async function init_() {
   navigateTo('my-work');
 
   try {
-    await loadTaskBootstrap_();
+    await Promise.all([loadTaskBootstrap_(), loadMyWorkData_()]);
     renderCurrentPage_();
   } catch (error) {
     showToast_(error.message || String(error), 'error');
@@ -126,6 +128,16 @@ function bindPageDelegation_() {
     if (action === 'set-task-filter') {
       STATE.taskFilter = button.dataset.filter || 'ACTIVE';
       renderCurrentPage_();
+    }
+    if (action === 'set-mywork-view') {
+      STATE.myWorkView = button.dataset.view || 'THIS_WEEK';
+      renderCurrentPage_();
+    }
+    if (action === 'refresh-my-work') {
+      loadMyWorkData_().then(renderCurrentPage_).catch(error => showToast_(error.message || String(error), 'error'));
+    }
+    if (action === 'quick-update-task') {
+      openTaskDetail_(taskId).then(() => openUpdateResultModal_()).catch(error => showToast_(error.message || String(error), 'error'));
     }
   });
 
@@ -219,36 +231,138 @@ async function loadTaskBootstrap_() {
 async function refreshTasks_() {
   STATE.loadingTasks = true;
   try {
-    STATE.tasks = await serverCall_('apiListTasks', {});
+    const results = await Promise.all([
+      serverCall_('apiListTasks', {}),
+      serverCall_('apiGetMyWork', {})
+    ]);
+    STATE.tasks = results[0] || [];
+    STATE.myWork = results[1] || null;
   } finally {
     STATE.loadingTasks = false;
   }
 }
 
+function loadMyWorkData_() {
+  return serverCall_('apiGetMyWork', {}).then(data => {
+    STATE.myWork = data || null;
+    return data;
+  });
+}
+
 function renderMyWork_() {
-  const active = STATE.tasks.filter(isTaskActive_).length;
-  const waiting = STATE.tasks.filter(task => task.Status === 'WAITING').length;
-  const overdue = STATE.tasks.filter(task => task.IsOverdue).length;
+  const data = STATE.myWork;
+  if (!data) return renderLoading_('Loading My Work...');
+
+  const summary = data.summary || {};
+  const sections = data.sections || {};
 
   return `
-    ${hero_('WORK FOCUS', String(active || 0), 'active work items', [
-      { label: 'Overdue', value: String(overdue), note: 'Live task data' },
-      { label: 'Waiting', value: String(waiting), note: 'Live task data' }
+    ${hero_('MY WORK', String(summary.totalActive || 0), 'active work items', [
+      { label: 'Overdue', value: String(summary.overdue || 0), note: 'Need attention' },
+      { label: 'Follow-up', value: String(summary.followUpDue || 0), note: 'Due / overdue' }
     ])}
 
     <div class="metric-grid">
-      ${metric_('Active Tasks', String(active), 'Task Core is live')}
-      ${metric_('Overdue', String(overdue), 'Calculated from due date')}
-      ${metric_('Waiting', String(waiting), 'External dependency')}
-      ${metric_('My Work Engine', 'PR03', 'Classification comes next')}
+      ${metric_('Due Today', String(summary.dueToday || 0), 'Task deadlines today')}
+      ${metric_('Waiting', String(summary.waiting || 0), 'External dependency')}
+      ${metric_('Missing Next Action', String(summary.missingNextAction || 0), 'Needs planning')}
+      ${metric_('My Work Engine', 'LIVE', 'PR03 classification')}
     </div>
 
-    <div class="panel section-stack">
-      ${panelHeader_('NEXT RELEASE', 'My Work classification', 'PR03')}
-      <div class="placeholder-copy">
-        Task data is now live. Need Attention, Today, Upcoming and Waiting classification will be connected in PR03.
-      </div>
+    <div class="mywork-toolbar section-stack">
+      ${myWorkViewChip_('TODAY', 'Today')}
+      ${myWorkViewChip_('THIS_WEEK', 'This Week')}
+      ${myWorkViewChip_('OVERDUE', 'Overdue')}
+      ${myWorkViewChip_('WAITING', 'Waiting')}
+      ${myWorkViewChip_('ALL', 'All Active')}
+      <button class="ghost-btn mywork-refresh" type="button" data-action="refresh-my-work">Refresh</button>
     </div>
+
+    <div class="mywork-sections section-stack">
+      ${renderMyWorkSections_(sections)}
+    </div>
+  `;
+}
+
+function myWorkViewChip_(value, label) {
+  const active = STATE.myWorkView === value ? ' active' : '';
+  return `<button class="filter-chip${active}" type="button" data-action="set-mywork-view" data-view="${value}">${label}</button>`;
+}
+
+function renderMyWorkSections_(sections) {
+  const need = sections.needAttention || [];
+  const today = sections.today || [];
+  const upcoming = sections.upcoming || [];
+  const waiting = sections.waiting || [];
+  const view = STATE.myWorkView;
+
+  if (view === 'OVERDUE') {
+    return renderMyWorkSection_('OVERDUE', 'Tasks already past deadline', need.filter(task => task.IsOverdue), 'danger');
+  }
+  if (view === 'WAITING') {
+    return renderMyWorkSection_('WAITING', 'Waiting for another person or dependency', waiting, 'waiting');
+  }
+  if (view === 'TODAY') {
+    return renderMyWorkSection_('NEED ATTENTION', 'Urgent items requiring action', need, 'danger') +
+      renderMyWorkSection_('TODAY', 'Actions and deadlines scheduled today', today, 'today');
+  }
+  if (view === 'ALL') {
+    return renderMyWorkSection_('ALL ACTIVE WORK', 'Current actionable tasks', [].concat(need, today, upcoming, waiting), 'all');
+  }
+
+  return renderMyWorkSection_('NEED ATTENTION', 'Overdue, follow-up and high-priority items', need, 'danger') +
+    renderMyWorkSection_('TODAY', 'Actions and deadlines scheduled today', today, 'today') +
+    renderMyWorkSection_('UPCOMING', 'Next seven days', upcoming, 'upcoming') +
+    renderMyWorkSection_('WAITING', 'Waiting for another person or dependency', waiting, 'waiting');
+}
+
+function renderMyWorkSection_(title, subtitle, tasks, tone) {
+  tasks = tasks || [];
+  return `
+    <section class="panel mywork-section ${tone || ''}">
+      <div class="mywork-section-head">
+        <div>
+          <div class="panel-kicker">${escapeHtml_(title)}</div>
+          <h3>${escapeHtml_(subtitle)}</h3>
+        </div>
+        <span class="mywork-count">${tasks.length}</span>
+      </div>
+      <div class="mywork-card-list">
+        ${tasks.length ? tasks.map(renderMyWorkCard_).join('') : `<div class="empty-inline">No items in this section.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderMyWorkCard_(task) {
+  const attention = (task.AttentionReasons || []).map(item => `<span class="mywork-alert-badge">${escapeHtml_(item.label)}</span>`).join('');
+  const project = task.ProjectName ? `<div class="mywork-project">${escapeHtml_(task.ProjectName)}</div>` : '';
+  const latest = task.LatestResult || {};
+  const resultPreview = latest.CompletedWork ? escapeHtml_(latest.CompletedWork) : '';
+  const nextAction = task.NextAction ? escapeHtml_(task.NextAction) : '<span class="muted">Next action not defined</span>';
+  const dueLabel = task.NextActionDue ? `Next ${formatDate_(task.NextActionDue)}` : (task.DueDate ? `Due ${formatDate_(task.DueDate)}` : '');
+
+  return `
+    <article class="mywork-card">
+      <div class="mywork-card-main">
+        <div class="mywork-card-topline">
+          <span class="badge ${priorityBadgeClass_(task.Priority)}">${escapeHtml_(task.Priority || 'MEDIUM')}</span>
+          ${attention}
+        </div>
+        <button class="mywork-title-link" type="button" data-action="open-task" data-task-id="${escapeHtml_(task.TaskID)}">${escapeHtml_(task.TaskTitle)}</button>
+        ${project}
+        <div class="mywork-progress-row">
+          <div class="progress-track"><div class="progress-fill" style="width:${Number(task.Progress) || 0}%"></div></div>
+          <span>${Number(task.Progress) || 0}%</span>
+        </div>
+        ${resultPreview ? `<div class="mywork-result-preview"><strong>Latest:</strong> ${resultPreview}</div>` : ''}
+        <div class="mywork-next"><span>Next Action</span><strong>${nextAction}</strong><small>${escapeHtml_(dueLabel)}</small></div>
+      </div>
+      <div class="mywork-card-actions">
+        <button class="secondary-btn" type="button" data-action="quick-update-task" data-task-id="${escapeHtml_(task.TaskID)}">Update Result</button>
+        <button class="ghost-btn" type="button" data-action="open-task" data-task-id="${escapeHtml_(task.TaskID)}">Open</button>
+      </div>
+    </article>
   `;
 }
 
@@ -594,9 +708,12 @@ async function submitEditTask_() {
   const form = document.getElementById('edit-task-form');
   if (!detail || !validateForm_(form)) return;
 
+  const payload = formObject_(form);
   setModalBusy_(true, 'Saving...');
   try {
-    await serverCall_('apiUpdateTaskMetadata', detail.task.TaskID, formObject_(form));
+    const response = await serverCall_('apiUpdateTaskMetadata', detail.task.TaskID, payload);
+    if (!response || !response.task) throw new Error('Updated task was not returned.');
+    STATE.currentTaskDetail = Object.assign({}, detail, { task: response.task });
     closeModal_();
     await refreshTasks_();
     STATE.currentTaskDetail = await serverCall_('apiGetTask', detail.task.TaskID);
@@ -1109,4 +1226,199 @@ function escapeHtml_(value) {
 function escapeHtmlAttr_(value) {
   return escapeHtml_(value).replace(/`/g, '&#096;');
 }
+
+
+/* =========================================================
+ * PR03 UI V2 - PRODUCTIVITY RENDERERS
+ * ======================================================= */
+
+function renderCurrentPage_() {
+  const target = document.getElementById('page-content');
+  const renderers = {
+    'my-work': renderMyWork_,
+    'tasks': renderTasks_,
+    'projects': renderProjects_,
+    'dashboard': renderDashboard_
+  };
+  target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
+  if (STATE.currentTaskDetail && document.getElementById('task-drawer').classList.contains('open')) {
+    renderTaskDrawerV2_(STATE.currentTaskDetail);
+  }
+}
+
+function renderMyWork_() {
+  const data = STATE.myWork;
+  if (!data) return renderLoading_('Loading My Work...');
+  const summary = data.summary || {};
+  const sections = data.sections || {};
+  return `
+    <div class="compact-summary-v2">
+      ${compactStatV2_('Overdue', summary.overdue || 0, true)}
+      ${compactStatV2_('Due today', summary.dueToday || 0)}
+      ${compactStatV2_('Follow-up', summary.followUpDue || 0)}
+      ${compactStatV2_('Waiting', summary.waiting || 0)}
+      ${compactStatV2_('Active', summary.totalActive || 0)}
+    </div>
+    <div class="productivity-toolbar-v2">
+      <div class="filter-tabs-v2">
+        ${myWorkViewChipV2_('TODAY','Today')}
+        ${myWorkViewChipV2_('THIS_WEEK','This Week')}
+        ${myWorkViewChipV2_('OVERDUE','Overdue')}
+        ${myWorkViewChipV2_('WAITING','Waiting')}
+        ${myWorkViewChipV2_('ALL','All Active')}
+      </div>
+      <div class="productivity-toolbar-right-v2">
+        <span class="work-context">${formatDate_(data.today)}</span>
+        <button class="secondary-btn" type="button" data-action="refresh-my-work">Refresh</button>
+      </div>
+    </div>
+    ${renderMyWorkSectionsV2_(sections)}
+  `;
+}
+
+function compactStatV2_(label, value, danger) {
+  return `<div class="compact-stat-v2${danger ? ' danger' : ''}"><strong>${Number(value)||0}</strong><span>${escapeHtml_(label)}</span></div>`;
+}
+
+function myWorkViewChipV2_(value,label) {
+  return `<button class="filter-chip-v2 ${STATE.myWorkView===value?'active':''}" type="button" data-action="set-mywork-view" data-view="${escapeHtmlAttr_(value)}">${escapeHtml_(label)}</button>`;
+}
+
+function renderMyWorkSectionsV2_(sections) {
+  const need=sections.needAttention||[], today=sections.today||[], upcoming=sections.upcoming||[], waiting=sections.waiting||[];
+  if (STATE.myWorkView==='OVERDUE') return renderWorkSectionV2_('Overdue', need.filter(t=>t.IsOverdue));
+  if (STATE.myWorkView==='WAITING') return renderWorkSectionV2_('Waiting', waiting);
+  if (STATE.myWorkView==='TODAY') return renderWorkSectionV2_('Need Attention',need)+renderWorkSectionV2_('Today',today);
+  if (STATE.myWorkView==='ALL') return renderWorkSectionV2_('All Active Work',[].concat(need,today,upcoming,waiting));
+  return renderWorkSectionV2_('Need Attention',need)+renderWorkSectionV2_('Today',today)+renderWorkSectionV2_('Upcoming',upcoming)+renderWorkSectionV2_('Waiting',waiting);
+}
+
+function renderWorkSectionV2_(title,tasks) {
+  tasks=tasks||[];
+  return `<section class="work-section-v2"><div class="work-section-head-v2"><h3>${escapeHtml_(title)}</h3><span class="work-count-v2">${tasks.length}</span></div><div class="work-list-v2">${tasks.length?tasks.map(renderWorkRowV2_).join(''):'<div class="empty-compact-v2">No items</div>'}</div></section>`;
+}
+
+function renderWorkRowV2_(task) {
+  const reason=(task.AttentionReasons||[])[0];
+  const context=[];
+  if (task.ProjectName) context.push(escapeHtml_(task.ProjectName));
+  if (task.NextAction) context.push('Next: '+escapeHtml_(task.NextAction));
+  else if (task.Status==='IN_PROGRESS') context.push('Next action not defined');
+  if (task.Status==='WAITING' && task.WaitingFor) context.push('Waiting for: '+escapeHtml_(task.WaitingFor));
+  let right='';
+  if (reason) right=`<span class="alert-v2">${escapeHtml_(reason.label)}</span>`;
+  else if (task.Status==='WAITING') right=`<span class="waiting-v2">${task.FollowUpDate?'Follow-up '+formatDate_(task.FollowUpDate):'Waiting'}</span>`;
+  else if (task.NextActionDue) right=`<span>${formatDate_(task.NextActionDue)}</span>`;
+  else if (task.DueDate) right=`<span>${formatDate_(task.DueDate)}</span>`;
+  return `<div class="work-row-v2" data-action="open-task" data-task-id="${escapeHtmlAttr_(task.TaskID)}"><div class="work-circle-v2"></div><div class="work-content-v2"><div class="work-title-v2">${escapeHtml_(task.TaskTitle)}</div><div class="work-meta-v2">${context.map(x=>`<span>${x}</span>`).join('')}</div></div><div class="work-right-v2">${right}<span>${Number(task.Progress)||0}%</span></div></div>`;
+}
+
+function renderTasks_() {
+  if (STATE.loadingTasks) return renderLoading_('Loading tasks...');
+  const active=STATE.tasks.filter(isTaskActive_);
+  const completed=STATE.tasks.filter(t=>t.Status==='COMPLETED');
+  const waiting=STATE.tasks.filter(t=>t.Status==='WAITING');
+  const overdue=STATE.tasks.filter(t=>t.IsOverdue);
+  return `
+    <div class="compact-summary-v2">
+      ${compactStatV2_('Active',active.length)}
+      ${compactStatV2_('In progress',active.filter(t=>t.Status==='IN_PROGRESS').length)}
+      ${compactStatV2_('Waiting',waiting.length)}
+      ${compactStatV2_('Overdue',overdue.length,true)}
+      ${compactStatV2_('Completed',completed.length)}
+    </div>
+    <div class="productivity-toolbar-v2">
+      <div class="filter-tabs-v2">
+        ${taskFilterV2_('ACTIVE','All')}${taskFilterV2_('IN_PROGRESS','In Progress')}${taskFilterV2_('WAITING','Waiting')}${taskFilterV2_('OVERDUE','Overdue')}${taskFilterV2_('COMPLETED','Completed')}
+      </div>
+      <div class="productivity-toolbar-right-v2"><input id="task-search" class="search-input-v2" type="search" placeholder="Search tasks..." value="${escapeHtmlAttr_(STATE.taskSearch)}"><button class="primary-btn" type="button" data-action="new-task">+ New Task</button></div>
+    </div>
+    <div id="task-table-host">${renderTaskTable_()}</div>
+  `;
+}
+
+function taskFilterV2_(filter,label) {
+  return `<button class="filter-chip-v2 ${STATE.taskFilter===filter?'active':''}" type="button" data-action="set-task-filter" data-filter="${escapeHtmlAttr_(filter)}">${escapeHtml_(label)}</button>`;
+}
+
+function renderTaskTable_() {
+  const tasks=getFilteredTasks_();
+  if (!tasks.length) return `<div class="task-list-v2"><div class="empty-compact-v2"><strong>No tasks found</strong><div style="margin-top:5px">Create a task or adjust the current filter.</div></div></div>`;
+  return `<div class="task-list-v2"><div class="task-list-head-v2"><div>Task</div><div>Status</div><div>Due</div><div>Progress</div><div>Priority</div></div>${tasks.map(taskRowLive_).join('')}</div>`;
+}
+
+function taskRowLive_(task) {
+  const priority=String(task.Priority||'MEDIUM').toLowerCase();
+  const progress=Number(task.Progress)||0;
+  const context=[];
+  if (task.ProjectName) context.push(escapeHtml_(task.ProjectName));
+  if (task.NextAction) context.push('Next: '+escapeHtml_(task.NextAction));
+  else if (task.Status==='IN_PROGRESS') context.push('Next action not defined');
+  const due=task.IsOverdue?`<span class="due-overdue-v2">Overdue ${Number(task.OverdueDays)||0}d</span>`:(task.DueDate?formatDate_(task.DueDate):'—');
+  return `<div class="task-row-v2" data-action="open-task" data-task-id="${escapeHtmlAttr_(task.TaskID)}"><div class="task-main-v2"><div class="task-title-line-v2"><span class="priority-dot-v2 ${priority}"></span><span class="task-title-v2">${escapeHtml_(task.TaskTitle)}</span></div><div class="task-sub-v2"><span>${escapeHtml_(task.TaskID)}</span>${context.map(x=>`<span>${x}</span>`).join('')}</div></div><div>${statusPillV2_(task.Status)}</div><div>${due}</div><div class="progress-mini-v2"><div class="progress-mini-track-v2"><div class="progress-mini-fill-v2" style="width:${progress}%"></div></div><span>${progress}%</span></div><div>${escapeHtml_(task.Priority||'MEDIUM')}</div></div>`;
+}
+
+function statusPillV2_(status) {
+  const map={NOT_STARTED:['Not Started',''],IN_PROGRESS:['In Progress','in-progress'],WAITING:['Waiting','waiting'],ON_HOLD:['On Hold','waiting'],COMPLETED:['Completed','completed'],CANCELLED:['Cancelled','cancelled']};
+  const info=map[status]||[status||'Unknown',''];
+  return `<span class="status-pill-v2 ${info[1]}">${escapeHtml_(info[0])}</span>`;
+}
+
+async function openTaskDetail_(taskId) {
+  if (!taskId) return;
+  openTaskDrawerShellV2_();
+  try {
+    STATE.currentTaskDetail=await serverCall_('apiGetTask',taskId);
+    renderTaskDrawerV2_(STATE.currentTaskDetail);
+  } catch(error) {
+    closeTaskDrawerV2_();
+    showToast_(error.message||String(error),'error');
+  }
+}
+
+function openTaskDrawerShellV2_() {
+  const drawer=document.getElementById('task-drawer');
+  const backdrop=document.getElementById('task-drawer-backdrop');
+  drawer.innerHTML='<div class="loading-row">Loading task...</div>';
+  drawer.classList.add('open'); drawer.setAttribute('aria-hidden','false'); backdrop.classList.add('show');
+  backdrop.onclick=closeTaskDrawerV2_;
+}
+
+function closeTaskDrawerV2_() {
+  const drawer=document.getElementById('task-drawer');
+  const backdrop=document.getElementById('task-drawer-backdrop');
+  drawer.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); backdrop.classList.remove('show');
+  STATE.currentTaskDetail=null;
+}
+
+function renderTaskDrawerV2_(detail) {
+  if (!detail || !detail.task) return;
+  const task=detail.task, latest=detail.latestResult, calc=detail.calculated||{};
+  const drawer=document.getElementById('task-drawer');
+  drawer.innerHTML=`<div class="drawer-head-v2"><div><div class="drawer-id-v2">${escapeHtml_(task.TaskID)}</div><h2 class="drawer-title-v2">${escapeHtml_(task.TaskTitle)}</h2></div><button class="drawer-close-v2" type="button" onclick="closeTaskDrawerV2_()">×</button></div><div class="drawer-body-v2"><div class="drawer-section-v2"><div class="drawer-grid-v2">${drawerFieldV2_('Status',statusLabel_(task.Status))}${drawerFieldV2_('Priority',task.Priority)}${drawerFieldV2_('Progress',(Number(task.Progress)||0)+'%')}${drawerFieldV2_('Due',task.DueDate?formatDate_(task.DueDate):'—')}${drawerFieldV2_('Assigned By',task.AssignedBy||'—')}${drawerFieldV2_('Owner',userName_(task.OwnerID))}</div></div>${task.ExpectedOutput?`<div class="drawer-section-v2"><div class="drawer-label-v2">Expected Output</div><div>${nl2br_(task.ExpectedOutput)}</div></div>`:''}<div class="drawer-section-v2"><div class="drawer-label-v2">Latest Result</div>${latest?renderResultSections_(latest):'<div class="empty-inline">No result update yet.</div>'}</div>${task.NextAction?`<div class="drawer-section-v2"><div class="drawer-label-v2">Next Action</div><strong>${escapeHtml_(task.NextAction)}</strong>${task.NextActionDue?`<div class="work-context" style="margin-top:6px">Due ${formatDate_(task.NextActionDue)}</div>`:''}</div>`:''}${task.WaitingFor?`<div class="drawer-section-v2"><div class="drawer-label-v2">Waiting For</div><div>${escapeHtml_(task.WaitingFor)}</div>${task.FollowUpDate?`<div class="work-context" style="margin-top:6px">Follow-up ${formatDate_(task.FollowUpDate)}</div>`:''}</div>`:''}<div class="drawer-actions-v2">${!['COMPLETED','CANCELLED'].includes(task.Status)?'<button class="primary-btn" type="button" onclick="openUpdateResultModal_()">Update Result</button>':''}<button class="secondary-btn" type="button" onclick="openEditTaskModal_()">Edit</button>${task.Status==='COMPLETED'?'<button class="secondary-btn" type="button" onclick="openReopenTaskModal_()">Reopen</button>':''}</div><div class="drawer-section-v2"><div class="drawer-label-v2">History</div><div class="timeline-list">${(detail.history||[]).length?(detail.history||[]).map(historyItem_).join(''):'<div class="empty-inline">No result history yet.</div>'}</div></div></div>`;
+}
+
+function drawerFieldV2_(name,value) { return `<div><div class="drawer-field-name-v2">${escapeHtml_(name)}</div><div class="drawer-field-value-v2">${escapeHtml_(value==null?'—':String(value))}</div></div>`; }
+
+function renderProjects_() {
+  return `<div class="compact-summary-v2">${compactStatV2_('Projects',DEMO_PROJECTS.length)}${compactStatV2_('On track',DEMO_PROJECTS.filter(p=>p.health==='ON TRACK').length)}${compactStatV2_('Attention',DEMO_PROJECTS.filter(p=>p.health==='ATTENTION').length,true)}</div><div class="project-list-v2">${DEMO_PROJECTS.map(projectRowV2_).join('')}</div>`;
+}
+function projectRowV2_(p) { return `<div class="project-row-v2"><div class="project-row-top-v2"><div><div class="project-name-v2">${escapeHtml_(p.name)}</div><div class="project-meta-v2">${escapeHtml_(p.status)} · ${escapeHtml_(p.health)} · Target ${escapeHtml_(p.target)}</div></div><div class="project-percent-v2">${Number(p.progress)||0}%</div></div><div class="project-progress-v2"><div class="project-progress-fill-v2" style="width:${Number(p.progress)||0}%"></div></div><div class="project-footer-v2"><span>${escapeHtml_(p.completed)} work items</span><span>Next: ${escapeHtml_(p.next)}</span></div></div>`; }
+
+function renderDashboard_() {
+  const active=STATE.tasks.filter(isTaskActive_).length, overdue=STATE.tasks.filter(t=>t.IsOverdue).length, waiting=STATE.tasks.filter(t=>t.Status==='WAITING').length, completed=STATE.tasks.filter(t=>t.Status==='COMPLETED').length;
+  return `<div class="dashboard-summary-v2">${dashboardCardV2_('Active Tasks',active,'Current work')}${dashboardCardV2_('Overdue',overdue,'Needs attention')}${dashboardCardV2_('Waiting',waiting,'External dependency')}${dashboardCardV2_('Completed',completed,'All completed tasks')}</div><div class="panel section-stack">${panelHeader_('PROJECTS','Project Overview','PR04 will connect live project data')}<div class="project-list-v2">${DEMO_PROJECTS.map(projectRowV2_).join('')}</div></div>`;
+}
+function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card-v2"><div class="label">${escapeHtml_(label)}</div><div class="value">${Number(value)||0}</div><div class="note">${escapeHtml_(note)}</div></div>`; }
+
+// Refresh button added in UI V2.
+(function bindUiV2Refresh(){
+  const btn=document.getElementById('refresh-page-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async()=>{
+    try { await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
+    catch(error){ showToast_(error.message||String(error),'error'); }
+  });
+})();
+
 </script>

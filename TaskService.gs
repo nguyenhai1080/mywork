@@ -135,6 +135,7 @@ function updateTaskMetadata_(taskId, payload, actor) {
     originalRow = found.rowValues.slice();
     const current = found.record;
     const patch = validateMetadataPatch_(current, payload);
+    if (!Object.keys(patch).length) throw new Error('No task metadata was received. Reload and try again.');
     patch.UpdatedAt = new Date();
 
     const updated = taskRepoUpdate_(taskRowNumber, patch);
@@ -521,18 +522,18 @@ function validateMetadataPatch_(current, payload) {
     patch.Priority = value;
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'assignedDate')) {
-    patch.AssignedDate = parseDateInput_(payload.assignedDate, 'Assigned Date');
+    patch.AssignedDate = normalizeTaskMetadataDate_(payload.assignedDate, 'Assigned Date');
     patch.StartDate = patch.AssignedDate;
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'dueDate')) {
-    patch.DueDate = parseDateInput_(payload.dueDate, 'Due Date');
+    patch.DueDate = normalizeTaskMetadataDate_(payload.dueDate, 'Due Date');
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'expectedOutput')) {
     patch.ExpectedOutput = String(payload.expectedOutput || '').trim();
   }
 
-  const assignedDate = patch.AssignedDate || current.AssignedDate;
-  const dueDate = patch.DueDate || current.DueDate;
+  const assignedDate = Object.prototype.hasOwnProperty.call(patch, 'AssignedDate') ? patch.AssignedDate : current.AssignedDate;
+  const dueDate = Object.prototype.hasOwnProperty.call(patch, 'DueDate') ? patch.DueDate : current.DueDate;
   if (compareDateOnly_(dueDate, assignedDate) < 0) {
     throw new Error('Due Date cannot be earlier than Assigned Date.');
   }
@@ -805,4 +806,11 @@ function listActiveUsers_() {
   return getSheetObjects_(MYWORK.SHEETS.USERS)
     .filter(user => normalizeBoolean_(user.IsActive) || String(user.IsActive) === '')
     .map(serializeRecordForClient_);
+}
+
+// H01: required date-only metadata; reject invalid/empty input before any write.
+function normalizeTaskMetadataDate_(value, fieldName) {
+  const date = parseDateInput_(value, fieldName);
+  if (!date) throw new Error(fieldName + ' is required.');
+  return parseDateInput_(toIsoDate_(date), fieldName);
 }

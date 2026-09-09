@@ -1,5 +1,5 @@
 const MYWORK = Object.freeze({
-  VERSION: '1.0.0-dev-pr02a',
+  VERSION: '1.0.0-dev-pr03',
 
   PROPERTIES: {
     DB_SPREADSHEET_ID: 'MYWORK_DB_SPREADSHEET_ID'

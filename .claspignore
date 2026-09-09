@@ -1,6 +1,10 @@
 .git/**
 .github/**
-docs/**
 *.md
 *.zip
 node_modules/**
+.gitignore
+.clasp.json
+.claspignore
+
+tests/**
