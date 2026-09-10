@@ -1,6 +1,6 @@
 # PR04 live acceptance — 2026-09-10
 
-Environment: DEV v9; browser interactions and real 90_AUDIT_LOG inspected. Follow-up UI guard tested automatically and included in next DEV version.
+Environment: DEV v10; browser interactions and real 90_AUDIT_LOG inspected. Completed-parent UI guard included and tested automatically.
 
 Test data retained: PRJ0001 ([PR04 TEST] Weighted progress acceptance); TSK000010 A, TSK000011 B, TSK000012 C. No existing user task was changed.
 
@@ -10,4 +10,8 @@ Audit evidence: AUD0000053 Project CREATE; AUD0000054/64/69 task CREATE; AUD0000
 
 Automated regression: 53 tests PASS (19 Project backend, 18 My Work, 14 H01 backend/syntax, 1 H01 UI, 1 completed-parent UI guard).
 
-Limits: valid reparent to a different parent has not been exercised in live UI; cross-project rejection/rollback failure injection covered by mocks. Project.Progress is calculated on reads; Sheet progress snapshot remains out of scope. Project lifecycle/health/milestones remain later scope. Not merged to develop.
+PASS: valid reparent of C (TSK000012) from B to root persists after reopening Web; project becomes 37.5%. Moving C back under B restores WBS 2.1, B summary 50%, project 66.67%. Real Sheet audit: AUD0000079 ParentTaskID TSK000011→blank (OP-20260910-083603-7B4782); AUD0000081 blank→TSK000011 (OP-20260910-153234-CCD241).
+
+Acceptance status: PR04 internal acceptance PASS.
+
+Limits: cross-project rejection/rollback failure injection covered by mocks. Project.Progress is calculated on reads; Sheet progress snapshot remains out of scope. Project lifecycle/health/milestones remain later scope. Not merged to develop.

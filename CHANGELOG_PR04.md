@@ -13,10 +13,10 @@ Branch: feature/pr04-project-core. Migration: NONE. Do not run setupMyWorkV1 on 
 
 ## Files changed
 Config.gs, TaskService.gs, AppJS.html, Styles.html, README.md.
-New: ProjectRepository.gs, ProjectService.gs, ProjectApi.gs, tests/pr04-project.test.cjs, CHANGELOG_PR04.md.
+New: ProjectRepository.gs, ProjectService.gs, ProjectApi.gs, tests/pr04-project.test.cjs, tests/pr04-parent-ui.test.cjs, tests/RESULTS_PR04.txt, CHANGELOG_PR04.md, PR04_LIVE_ACCEPTANCE.md.
 
 ## Validation
-19 Project Core mock tests + 33 existing H01/PR03 tests PASS; all GS/AppJS syntax checks PASS. Local browser checked project list, nested WBS layout/progress and Edit Project form with fixture data. Real Sheet writes still require DEV acceptance.
+53 automated checks PASS, including Project Core, H01/PR03 regression, syntax and completed-parent UI guard. DEV v10 live acceptance PASS: real Sheet audit, project create/edit, weighted nested WBS, valid reparent both directions, cycle rejection, reload and My Work context. See PR04_LIVE_ACCEPTANCE.md for evidence.
 
 ## DEV checklist
 1. Create project with owner, Start Date 09/09/2026, Target Date 30/09/2026. Verify 20_PROJECTS and CREATE audit. Reload retains project.
