@@ -29,3 +29,6 @@ New: ProjectRepository.gs, ProjectService.gs, ProjectApi.gs, tests/pr04-project.
 8. Project task due today appears in My Work with project name; Update Result still works; H01 dates still persist.
 
 Do not merge develop until DEV acceptance passes. Rollback Web App to v8 if needed; no data deletion/migration required.
+
+## DEV follow-up 2026-09-10
+Live acceptance and audit evidence: PR04_LIVE_ACCEPTANCE.md. Added UI guard to prevent completed parent selection from silently becoming a top-level task. 53 automated checks pass.

@@ -53,3 +53,4 @@ PASS moving parent beneath descendant rejected
 PASS valid parent accepted
 PASS project progress reads changed task data
 19 PR04 tests passed (mock Sheet).
+PASS completed parent cannot silently fall back to top-level task
