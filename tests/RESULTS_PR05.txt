@@ -1,0 +1,89 @@
+h01-ui.test.cjs (exit 0)
+PASS reproduces empty payload before fix; fixed Save sends both dates (disabled-control FormData mock).
+
+h01.test.cjs (exit 0)
+PASS syntax: all GS and AppJS
+PASS camelCase persists with reordered headers and API read-back
+PASS audit records both dates with before/after
+PASS partial due update validates against existing assigned
+PASS partial assigned update validates against existing due
+PASS equal dates accepted
+PASS empty, invalid and malformed dates rejected
+PASS unknown header fails before any writes
+PASS duplicate header rejected
+PASS ignored write fails verification and rolls back
+PASS audit failure rolls task back
+PASS unchanged date has no duplicate date audit
+PASS missing task fails
+PASS empty payload rejected before write
+14 tests passed; Sheets mocked. Live deployment checks remain required.
+
+pr03-mywork.test.cjs (exit 0)
+PASS MW01 overdue
+PASS MW02 follow-up today
+PASS MW03 follow-up overdue
+PASS MW04 next action overdue
+PASS MW05 due today
+PASS MW06 next action today
+PASS MW07 upcoming boundaries
+PASS MW08 waiting future or absent follow-up
+PASS MW09 waiting due only once
+PASS MW10 completed hidden
+PASS MW11 cancelled hidden
+PASS MW12 project context
+PASS MW13 multiple reasons, one section
+PASS MW14 reload aggregation reclassifies changed record
+PASS MW15 timezone date near UTC midnight
+PASS archived and other owner excluded
+PASS high priority due soon escalates per existing rule
+PASS waiting with near due follows classification precedence
+18 My Work logic tests passed. Mock data only; browser interaction remains manual.
+
+pr04-parent-ui.test.cjs (exit 0)
+PASS completed parent cannot silently fall back to top-level task
+
+pr04-project.test.cjs (exit 0)
+PASS create project persists and audits
+PASS edit dates persists and validates partial update
+PASS audit failure rolls back project creation
+PASS audit failure rolls back project edit
+PASS required name dates owner
+PASS weighted siblings 1:3
+PASS nested WBS does not double-count parent progress
+PASS default blank weight is one
+PASS empty project is zero
+PASS cancelled and archived excluded
+PASS completed leaf is 100
+PASS cycles rejected
+PASS orphan rejected
+PASS invalid weight rejected
+PASS WBS order and depth
+PASS parent from other project rejected
+PASS moving parent beneath descendant rejected
+PASS valid parent accepted
+PASS project progress reads changed task data
+19 PR04 tests passed (mock Sheet).
+
+pr05-market-ui.test.cjs (exit 0)
+PASS active page renderer routes to Market Contacts
+PASS contact save collects values before disabling and uses server records
+
+pr05-market.test.cjs (exit 0)
+PASS empty DB reports uninitialized without writes
+PASS initialize twice preserves existing sheets
+PASS create market persists normalized code
+PASS duplicate code rejected case-insensitively
+PASS rate requires currency and valid date
+PASS invalid rates and unknown fields rejected
+PASS first active contact primary and retains plus/zeros
+PASS second contact secondary retains leading zero
+PASS switch primary audits both records with same operation
+PASS deactivate primary promotes remaining active contact
+PASS inactive-only market has no primary; reactivation promotes
+PASS contact validation missing parent bad email and move
+PASS audit failure rolls back market update
+PASS audit failure rolls back contact insert
+PASS readback failure rolls back insert releases lock
+PASS literal formula text readback preserved
+PASS missing duplicate actual header rejects before write
+17 Market Contacts tests PASS; all source syntax PASS

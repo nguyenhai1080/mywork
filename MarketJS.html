@@ -1,0 +1,61 @@
+<script>
+async function loadMarkets_() {
+  STATE.marketLoading=true;STATE.marketError='';
+  try {STATE.marketData=await serverCall_('apiListMarketContacts');}
+  catch(e){STATE.marketError=e.message||String(e);throw e;}
+  finally{STATE.marketLoading=false;}
+}
+async function refreshMarkets_(){try{await loadMarkets_();if(STATE.page==='markets')renderCurrentPage_();}catch(e){if(STATE.page==='markets')renderCurrentPage_();showToast_(e.message,'error');}}
+function marketAction_(action,button){
+  if(action==='initialize-markets')initializeMarkets_();
+  if(action==='new-market')openMarketModal_();
+  if(action==='edit-market')openMarketModal_(button.dataset.marketId);
+  if(action==='open-market'){STATE.marketId=button.dataset.marketId;renderCurrentPage_();}
+  if(action==='back-markets'){STATE.marketId='';renderCurrentPage_();}
+  if(action==='new-contact')openMarketContactModal_();
+  if(action==='edit-contact')openMarketContactModal_(button.dataset.contactId);
+  if(action==='refresh-markets')refreshMarkets_();
+}
+async function initializeMarkets_(){if(STATE.marketInitializing)return;STATE.marketInitializing=true;renderCurrentPage_();try{await serverCall_('apiInitializeMarketContacts');await loadMarkets_();}catch(e){showToast_(e.message,'error');}finally{STATE.marketInitializing=false;renderCurrentPage_();}}
+function marketContacts_(id){return (STATE.marketData.contacts||[]).filter(c=>c.MarketID===id);}
+function marketRate_(m){return m.ExchangeRate!==''&&m.ExchangeRate!=null?'1 USD = '+escapeHtml_(String(m.ExchangeRate))+' '+escapeHtml_(m.Currency)+' · '+formatDate_(m.RateDate):'Rate not set';}
+function renderMarkets_(){
+ if(STATE.marketError)return '<div class="empty-state"><p>'+escapeHtml_(STATE.marketError)+'</p><button class="secondary-btn" data-action="refresh-markets">Retry</button></div>';
+ if(!STATE.marketData)return renderLoading_('Loading market contacts...');
+ if(!STATE.marketData.ready)return '<div class="empty-state"><h2>Market Contacts</h2><p>Keep market details and your contact people in one place.</p><button class="primary-btn" data-action="initialize-markets" '+(STATE.marketInitializing?'disabled':'')+'>'+(STATE.marketInitializing?'Preparing...':'Get started')+'</button></div>';
+ const m=STATE.marketData.markets.find(m=>m.MarketID===STATE.marketId);
+ if(m){const contacts=marketContacts_(m.MarketID).slice().sort((a,b)=>Number(marketBool_(b.IsPrimary))-Number(marketBool_(a.IsPrimary))||String(a.ContactName).localeCompare(String(b.ContactName)));
+ return '<div class="productivity-toolbar-v2"><button class="ghost-btn" data-action="back-markets">← Markets</button><div><button class="secondary-btn" data-action="edit-market" data-market-id="'+escapeHtmlAttr_(m.MarketID)+'">Edit Market</button> <button class="primary-btn" data-action="new-contact">+ Contact</button></div></div><h2>'+escapeHtml_(m.Country)+' · '+escapeHtml_(m.ShortName)+'</h2><p>'+escapeHtml_(m.Operator||'Operator not set')+'</p><p class="work-context">'+marketRate_(m)+'</p>'+(m.Note?'<p>'+nl2br_(m.Note)+'</p>':'')+'<div class="market-contact-grid">'+(contacts.map(c=>'<article class="market-contact-card"><div class="market-contact-heading"><h3>'+escapeHtml_(c.ContactName)+'</h3><span class="status-pill-v2 '+(marketBool_(c.IsActive)?'in-progress':'cancelled')+'">'+(!marketBool_(c.IsActive)?'Inactive':marketBool_(c.IsPrimary)?'Primary':'Contact')+'</span></div><p class="work-context">'+escapeHtml_(c.Role||'')+'</p><p>'+marketPhone_(c.Tel)+'</p><p>'+marketEmail_(c.Email)+'</p><p>'+escapeHtml_(c.Channel||'')+'</p>'+(c.Note?'<p>'+nl2br_(c.Note)+'</p>':'')+'<button class="secondary-btn" data-action="edit-contact" data-contact-id="'+escapeHtmlAttr_(c.ContactID)+'">Edit Contact</button></article>').join('')||'<div class="empty-compact-v2">No contacts yet. Add the first contact to make them the primary contact.</div>')+'</div>';
+ }
+ return '<div class="productivity-toolbar-v2"><input id="market-search" class="search-input" type="search" aria-label="Search markets and contacts" placeholder="Search country, operator, contact..." value="'+escapeHtmlAttr_(STATE.marketSearch||'')+'"><button class="primary-btn" data-action="new-market">+ Market</button></div><div id="market-table-host">'+renderMarketTable_()+'</div>';
+}
+function marketBool_(v){return v===true||String(v).toLowerCase()==='true';}
+function marketPhone_(v){if(!v)return '<span class="work-context">No phone</span>';return '<a href="tel:'+escapeHtmlAttr_(String(v).replace(/[^+0-9]/g,''))+'">'+escapeHtml_(v)+'</a>';}
+function marketEmail_(v){if(!v)return '<span class="work-context">No email</span>';return '<a href="mailto:'+escapeHtmlAttr_(encodeURIComponent(v))+'">'+escapeHtml_(v)+'</a>';}
+function renderMarketTable_(){
+ const q=String(STATE.marketSearch||'').trim().toLocaleLowerCase();
+ const rows=STATE.marketData.markets.filter(m=>[m.Country,m.ShortName,m.Operator,...marketContacts_(m.MarketID).flatMap(c=>[c.ContactName,c.Tel,c.Email])].join(' ').toLocaleLowerCase().includes(q));
+ if(!rows.length)return '<div class="empty-compact-v2">No markets found. Add a market or change your search.</div>';
+ return '<div class="table-wrap"><table class="data-table market-table"><thead><tr><th>Market</th><th>Operator</th><th>Primary contact</th><th>Phone / Email</th><th>Currency / Rate</th><th>Note</th></tr></thead><tbody>'+rows.map(m=>{const list=marketContacts_(m.MarketID).filter(c=>marketBool_(c.IsActive)),c=list.find(c=>marketBool_(c.IsPrimary))||{};return '<tr><td><button class="table-link" data-action="open-market" data-market-id="'+escapeHtmlAttr_(m.MarketID)+'">'+escapeHtml_(m.Country)+'</button><div class="work-context">'+escapeHtml_(m.ShortName)+'</div></td><td>'+escapeHtml_(m.Operator||'—')+'</td><td>'+escapeHtml_(c.ContactName||'No contact')+'<div class="work-context">'+list.length+' active contacts</div></td><td>'+marketPhone_(c.Tel)+'<br>'+marketEmail_(c.Email)+'</td><td>'+escapeHtml_(m.Currency||'—')+'<div class="work-context">'+marketRate_(m)+'</div></td><td>'+escapeHtml_(m.Note||'')+'</td></tr>';}).join('')+'</tbody></table></div>';
+}
+function marketInput_(name,value,type,extra){return '<input name="'+name+'" type="'+(type||'text')+'" maxlength="2000" value="'+escapeHtmlAttr_(value==null?'':String(value))+'" '+(extra||'')+'>';}
+function openMarketModal_(id){const m=STATE.marketData.markets.find(m=>m.MarketID===id)||{};STATE.editingMarketId=m.MarketID||'';
+ showModal_(id?'Edit Market':'New Market','<form id="market-form" class="form-stack" onsubmit="return false;"><div class="form-grid-2">'+formField_('Country *',marketInput_('country',m.Country,'text','required'))+formField_('Short name *',marketInput_('shortName',m.ShortName,'text','required pattern="[A-Za-z0-9_-]{2,20}"'))+'</div>'+formField_('Operator',marketInput_('operator',m.Operator))+formField_('Currency',marketInput_('currency',m.Currency,'text','placeholder="e.g. MZN (Meticais)"'))+'<div class="form-grid-2">'+formField_('1 USD = local currency',marketInput_('exchangeRate',m.ExchangeRate,'number','min="0.00000001" step="any"'))+formField_('Rate date',marketInput_('rateDate',m.RateDate,'date'))+'</div>'+formField_('Note','<textarea name="note" maxlength="2000">'+escapeHtml_(m.Note||'')+'</textarea>')+'</form>',[{label:'Cancel',className:'ghost-btn',close:true},{label:'Save Market',className:'primary-btn',action:'save-market'}]);
+}
+function openMarketContactModal_(id){const c=STATE.marketData.contacts.find(c=>c.ContactID===id)||{};STATE.editingContactId=c.ContactID||'';
+ showModal_(id?'Edit Contact':'New Contact','<form id="market-contact-form" class="form-stack" onsubmit="return false;">'+formField_('Contact name *',marketInput_('contactName',c.ContactName,'text','required'))+formField_('Role / Department',marketInput_('role',c.Role))+'<div class="form-grid-2">'+formField_('Phone',marketInput_('tel',c.Tel,'tel'))+formField_('Email',marketInput_('email',c.Email,'email'))+'</div>'+formField_('Preferred channel',marketInput_('channel',c.Channel,'text','placeholder="WhatsApp, Telegram, Zalo..."'))+formField_('Note','<textarea name="note" maxlength="2000">'+escapeHtml_(c.Note||'')+'</textarea>')+'<label><input type="checkbox" name="isPrimary" '+(marketBool_(c.IsPrimary)?'checked':'')+'> Primary contact</label><label><input type="checkbox" name="isActive" '+(c.IsActive===undefined||marketBool_(c.IsActive)?'checked':'')+'> Active</label><p class="work-context">Each market has one primary contact among its active contacts. Choosing a new primary replaces the previous one.</p></form>',[{label:'Cancel',className:'ghost-btn',close:true},{label:'Save Contact',className:'primary-btn',action:'save-market-contact'}]);
+}
+async function submitMarket_(contact){
+ if(STATE.marketSaving)return;
+ const f=document.getElementById(contact?'market-contact-form':'market-form');if(!validateForm_(f))return;
+ const input=formObject_(f),id=contact?STATE.editingContactId:STATE.editingMarketId;
+ if(contact){input.marketId=STATE.marketId;input.isPrimary=f.elements.isPrimary.checked;input.isActive=f.elements.isActive.checked;}
+ STATE.marketSaving=true;setModalBusy_(true,'Saving...');
+ try{
+ const r=await serverCall_(contact?'apiSaveMarketContact':'apiSaveMarket',id,input);
+ if(contact){STATE.marketData.contacts=STATE.marketData.contacts.filter(c=>c.MarketID!==input.marketId).concat(r.contacts);}
+ else {STATE.marketData.markets=STATE.marketData.markets.filter(m=>m.MarketID!==r.market.MarketID).concat(r.market);STATE.marketId=r.market.MarketID;}
+ closeModal_();STATE.page='markets';navigateTo('markets');showToast_(contact?'Contact saved.':'Market saved.','success');
+ }catch(e){setModalBusy_(false);showToast_(e.message||String(e),'error');}finally{STATE.marketSaving=false;}
+}
+</script>

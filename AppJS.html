@@ -3,11 +3,13 @@ const PAGE_TITLES = {
   'my-work': 'My Work',
   'tasks': 'Tasks',
   'projects': 'Projects',
+  'markets': 'Market Contacts',
   'dashboard': 'Dashboard'
 };
 
 const STATE = {
   page: 'my-work',
+  marketData: null, marketId: '', marketSearch: '',
   tasks: [],
   projects: [],
   projectDetail: null,
@@ -115,6 +117,7 @@ function bindPageDelegation_() {
 
     const action = button.dataset.action;
     const taskId = button.dataset.taskId;
+    marketAction_(action,button);
 
     if (action === 'new-project') openProjectModal_();
     if (action === 'open-project') openProject_(button.dataset.projectId);
@@ -150,6 +153,7 @@ function bindPageDelegation_() {
   });
 
   pageContent.addEventListener('input', event => {
+    if(event.target.id==='market-search'){STATE.marketSearch=event.target.value;document.getElementById('market-table-host').innerHTML=renderMarketTable_();}
     if (event.target.id === 'task-search') {
       STATE.taskSearch = event.target.value || '';
       renderTaskTableOnly_();
@@ -170,6 +174,8 @@ function bindOverlayDelegation_() {
     if (!actionButton) return;
 
     const action = actionButton.dataset.modalAction;
+    if(action==='save-market')submitMarket_(false);
+    if(action==='save-market-contact')submitMarket_(true);
     if (action === 'save-project') submitProject_();
     if (action === 'save-project-task') submitProjectTask_();
     if (action === 'save-wbs') submitWbs_();
@@ -201,6 +207,7 @@ function closeMobileSidebar_() {
 
 function navigateTo(page) {
   STATE.page = page;
+  if(page==='markets'&&!STATE.marketData&&!STATE.marketLoading)refreshMarkets_();
   STATE.currentTaskDetail = page === 'tasks' ? STATE.currentTaskDetail : null;
 
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
@@ -223,6 +230,7 @@ function renderCurrentPage_() {
     'my-work': renderMyWork_,
     'tasks': renderTasks_,
     'projects': renderProjects_,
+    'markets': renderMarkets_,
     'dashboard': renderDashboard_
   };
 
@@ -1251,6 +1259,7 @@ function renderCurrentPage_() {
     'my-work': renderMyWork_,
     'tasks': renderTasks_,
     'projects': renderProjects_,
+    'markets': renderMarkets_,
     'dashboard': renderDashboard_
   };
   target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
@@ -1429,7 +1438,7 @@ function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card
   const btn=document.getElementById('refresh-page-btn');
   if (!btn) return;
   btn.addEventListener('click', async()=>{
-    try { await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
+    try { if(STATE.page==='markets'){await refreshMarkets_();return;} await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
     catch(error){ showToast_(error.message||String(error),'error'); }
   });
 })();
