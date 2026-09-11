@@ -154,7 +154,7 @@ function bindPageDelegation_() {
     }
   });
 
-  pageContent.addEventListener('change', event=>{const map={'mc-market':'marketId','mc-year':'year','mc-month':'month','mc-view':'view','mc-status':'status'};if(map[event.target.id]){if(event.target.id==='mc-year'&&!event.target.checkValidity())return;consumptionState_()[map[event.target.id]]=event.target.value;renderCurrentPage_();}});
+  pageContent.addEventListener('change', event=>{const map={'kpi-basis':'compositionBasis','mc-market':'marketId','mc-year':'year','mc-month':'month','mc-view':'view','mc-status':'status'};if(map[event.target.id]){if(event.target.id==='mc-year'&&!event.target.checkValidity())return;consumptionState_()[map[event.target.id]]=event.target.value;renderCurrentPage_();}});
   pageContent.addEventListener('input', event => {
     if(event.target.id==='market-search'){STATE.marketSearch=event.target.value;document.getElementById('market-table-host').innerHTML=renderMarketTable_();}
     if (event.target.id === 'task-search') {
@@ -177,6 +177,9 @@ function bindOverlayDelegation_() {
     if (!actionButton) return;
 
     const action = actionButton.dataset.modalAction;
+    if(action==='kpi-save')kpiSave_();
+    if(action==='kpi-preview')kpiPreview_();
+    if(action==='kpi-import-save')kpiPersist_(consumptionState_().kpiImport);
     if(action==='mc-save')mcSave_();
     if(action==='mc-preview')mcPreview_();
     if(action==='mc-import-save')mcImportSave_();
@@ -194,6 +197,7 @@ function bindOverlayDelegation_() {
   });
 
   root.addEventListener('change', event => {
+    if(event.target.id==='kpi-form-code'){consumptionState_().kpiCode=event.target.value;kpiEdit_();}
     if(event.target.id==='mc-mode')mcMode_();
     if(event.target.id==='mc-form-market'){consumptionState_().marketId=event.target.value==='VTG'?'__VTG__':event.target.value;mcForm_();}
     if(event.target.id==='mc-form-scenario'){consumptionState_().editScenario=event.target.value;mcForm_();}
