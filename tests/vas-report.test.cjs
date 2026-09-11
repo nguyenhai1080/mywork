@@ -1,0 +1,13 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=require('path');const c=vm.createContext({});for(const f of ['ConsumptionJS.html','VasReportJS.html'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8').replace(/<\/?script[^>]*>/g,''),c);const run=s=>vm.runInContext(s,c);let n=0;function test(name,f){f();n++;console.log('PASS '+name)}
+run("var records=[];for(var m=1;m<=12;m++)records.push({MarketID:'M',Year:2025,Month:m,Scenario:'ACTUAL',Total:100,VAS:m<=3?10:20});var state={year:2025,month:6,status:'ALL',data:{records,vtgRecords:[],markets:[{MarketID:'M',ShortName:'VTC'},{MarketID:'T',ShortName:'TEST1'},{MarketID:'C',ShortName:'VTCM'},{MarketID:'D',ShortName:'DOM'}]}};");
+test('quarter sums and ratio use sums',()=>{assert.equal(run("vasQuarter_(state,'M',2025,2).revenue"),60);assert.equal(run("vasQuarter_(state,'M',2025,2).share"),20);});
+test('QoQ quarter boundary',()=>assert.equal(run("vasPeriod_(state,'M',2025,2).qoq"),100));
+test('Q1 uses previous year Q4',()=>{run("state.data.records.push(...[10,11,12].map(Month=>({MarketID:'M',Year:2024,Month,Scenario:'ACTUAL',Total:100,VAS:5})))");assert.equal(run("vasPeriod_(state,'M',2025,1).qoq"),100);});
+test('missing month gives no revenue or false warning',()=>{assert.equal(run("vasQuarter_(state,'M',2026,1).revenue"),null);assert.equal(run('vasAlert_(null,10).flag'),false);});
+test('zero denominator unavailable and zero current negative growth',()=>{assert.equal(run('vasGrowth_(10,0)'),null);assert.equal(run('vasGrowth_(0,10)'),-100);});
+test('twice threshold inclusive',()=>{assert.equal(run('vasAlert_(20,10).flag'),true);assert.equal(run('vasAlert_(19.9,10).flag'),false);});
+test('VTG nonpositive baseline never generates times-two warning',()=>{assert.equal(run('vasAlert_(10,0).flag'),false);assert.equal(run('vasAlert_(-1,-10).flag'),false);});
+test('all real markets includes missing DOM excludes test and VTCM',()=>{assert.equal(run('vasMarkets_(state).length'),3);});
+test('parent quarter uses monthly original only',()=>{run("state.data.vtgRecords=[{MarketID:'VTG',Year:2025,Month:0,Scenario:'ACTUAL',VAS:10000},...[1,2,3].map(Month=>({MarketID:'VTG',Year:2025,Month,Scenario:'ACTUAL',Total:200,VAS:30}))]");assert.equal(run("vasQuarter_(state,'VTG',2025,1).revenue"),90);});
+test('missing TDG leaves ratio missing even with revenue',()=>{run("var noTotal={...state,data:{...state.data,records:records.map(r=>({...r,Total:''}))}}");assert.equal(run("vasQuarter_(noTotal,'M',2025,1).share"),null);});
+console.log(n+' VAS checks PASS');
