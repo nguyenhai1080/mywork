@@ -16,3 +16,6 @@ AppJS.html, Styles.html, VasReportJS.html, tests/vas-report.test.cjs, VAS_QUARTE
 17 kiểm thử VAS: tổng và tỷ trọng, QoQ chuyển năm, YoY tháng/quý, cả năm đủ/thiếu tháng, số tổng năm gốc, cảnh báo âm, ngưỡng gấp hai, VTG không tăng trưởng dương, số thiếu và mẫu số 0.
 
 Đã kiểm tra trực tiếp ba tab trên Web App. T6/2026: VTG YoY 30.0%, MOV 73.0% và VTC 80.4% cảnh báo gấp hai; VTZ -74.7% cảnh báo âm. Toàn bộ 11 tệp kiểm thử đạt.
+
+## Sửa kỳ chưa đủ dữ liệu
+Các bản ghi ACTUAL/DRAFT chưa chỉnh sửa (Revision 1), nguồn TD thuc.xlsx | TD thuc!, tháng 8–12/2026, toàn bộ Total/Voice/SMS/Data/VAS bằng 0 được nhận diện là placeholder của bản nguồn đến tháng 7. Chỉ loại khỏi tính báo cáo VAS, không sửa Sheet. Bản ghi chỉnh sửa (Revision > 1), đã chốt, nguồn khác hoặc số 0 lịch sử giữ nguyên. Quý/năm chưa đủ tháng không có doanh thu cả kỳ, YoY/QoQ hay cảnh báo. Bộ lọc ghi rõ cơ sở YoY. 23 kiểm thử VAS đạt.

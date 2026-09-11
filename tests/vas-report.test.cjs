@@ -17,4 +17,11 @@ test('annual original fallback',()=>{run("var annualState={...state,vasMode:'YEA
 test('negative VTG and market both alert even without positive parent',()=>{assert.equal(run('vasAlert_(-10,null).flag'),true);assert.equal(run('vasAlert_(-10,-10,true).flag'),true);});
 test('positive VTG is not compared against itself',()=>assert.equal(run('vasAlert_(10,10,true).flag'),false));
 test('annual uses twelve month sum',()=>assert.equal(run("vasValue_({...state,vasMode:'YEAR'},'M',2025,1).revenue"),210));
+run("var incomplete={year:2026,month:9,vasQuarter:3,status:'ALL',data:{markets:[{MarketID:'M',ShortName:'M'}],vtgRecords:[],records:[7,8,9,10,11,12].map(Month=>({MarketID:'M',Year:2026,Month,Scenario:'ACTUAL',Status:'DRAFT',Revision:1,Source:'TD thuc.xlsx | TD thuc!JM22:JM26',Total:Month===7?100:0,Voice:0,SMS:0,Data:0,VAS:Month===7?10:0}))}}");
+test('Q3 placeholders are one of three actual months and no alerts',()=>{assert.equal(run("vasRows_(incomplete)[1].count"),1);assert.equal(run("vasRows_(incomplete)[1].revenue"),null);assert.equal(run("vasRows_(incomplete)[1].qoq"),null);assert.equal(run("vasRows_(incomplete)[1].alert.flag"),false);});
+test('placeholder month is unavailable not actual zero',()=>assert.equal(run("vasValue_({...incomplete,vasMode:'MONTH'},'M',2026,8).revenue"),null));
+test('manual confirmed zero is retained',()=>assert.equal(run("vasPlaceholder_({...incomplete.data.records[1],Revision:2})"),false));
+test('final zero is retained',()=>assert.equal(run("vasPlaceholder_({...incomplete.data.records[1],Status:'FINAL'})"),false));
+test('other sources and historical zeros retained',()=>{assert.equal(run("vasPlaceholder_({...incomplete.data.records[1],Source:'Manual'})"),false);assert.equal(run("vasPlaceholder_({...incomplete.data.records[1],Year:2025})"),false);});
+test('confirmed complete zero quarter gives real negative growth',()=>{run("var confirmed={...incomplete,data:{...incomplete.data,records:[...incomplete.data.records.map(r=>({...r,Revision:2})),...[7,8,9].map(Month=>({MarketID:'M',Year:2025,Month,Scenario:'ACTUAL',Total:100,VAS:100}))]}}");assert.ok(run("vasRows_(confirmed)[1].yoy")<0);assert.equal(run("vasRows_(confirmed)[1].alert.flag"),true);});
 console.log(n+' VAS checks PASS');
