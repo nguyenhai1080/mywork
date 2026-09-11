@@ -6,8 +6,15 @@ test('Q1 uses previous year Q4',()=>{run("state.data.records.push(...[10,11,12].
 test('missing month gives no revenue or false warning',()=>{assert.equal(run("vasQuarter_(state,'M',2026,1).revenue"),null);assert.equal(run('vasAlert_(null,10).flag'),false);});
 test('zero denominator unavailable and zero current negative growth',()=>{assert.equal(run('vasGrowth_(10,0)'),null);assert.equal(run('vasGrowth_(0,10)'),-100);});
 test('twice threshold inclusive',()=>{assert.equal(run('vasAlert_(20,10).flag'),true);assert.equal(run('vasAlert_(19.9,10).flag'),false);});
-test('VTG nonpositive baseline never generates times-two warning',()=>{assert.equal(run('vasAlert_(10,0).flag'),false);assert.equal(run('vasAlert_(-1,-10).flag'),false);});
+test('VTG nonpositive baseline never generates times-two warning',()=>{assert.equal(run('vasAlert_(10,0).flag'),false);assert.equal(run('vasAlert_(-1,-10).flag'),true);});
 test('all real markets includes missing DOM excludes test and VTCM',()=>{assert.equal(run('vasMarkets_(state).length'),3);});
 test('parent quarter uses monthly original only',()=>{run("state.data.vtgRecords=[{MarketID:'VTG',Year:2025,Month:0,Scenario:'ACTUAL',VAS:10000},...[1,2,3].map(Month=>({MarketID:'VTG',Year:2025,Month,Scenario:'ACTUAL',Total:200,VAS:30}))]");assert.equal(run("vasQuarter_(state,'VTG',2025,1).revenue"),90);});
 test('missing TDG leaves ratio missing even with revenue',()=>{run("var noTotal={...state,data:{...state.data,records:records.map(r=>({...r,Total:''}))}}");assert.equal(run("vasQuarter_(noTotal,'M',2025,1).share"),null);});
+test('monthly YoY compares same month',()=>{run("state.data.records.push({MarketID:'M',Year:2024,Month:4,Scenario:'ACTUAL',Total:100,VAS:10})");assert.equal(run("vasCompare_({...state,vasMode:'MONTH'},'M',2025,4).yoy"),100);});
+test('quarter YoY does not use prior quarter',()=>{run("state.data.records.push(...[5,6].map(Month=>({MarketID:'M',Year:2024,Month,Scenario:'ACTUAL',Total:100,VAS:10})))");assert.equal(run("vasCompare_(state,'M',2025,2).yoy"),100);});
+test('annual needs complete year',()=>assert.equal(run("vasValue_({...state,vasMode:'YEAR'},'M',2024,1).revenue"),null));
+test('annual original fallback',()=>{run("var annualState={...state,vasMode:'YEAR',data:{...state.data,records:[{MarketID:'M',Year:2023,Month:0,Scenario:'ACTUAL',Total:1000,VAS:80}]}}");assert.equal(run("vasValue_(annualState,'M',2023,1).revenue"),80);});
+test('negative VTG and market both alert even without positive parent',()=>{assert.equal(run('vasAlert_(-10,null).flag'),true);assert.equal(run('vasAlert_(-10,-10,true).flag'),true);});
+test('positive VTG is not compared against itself',()=>assert.equal(run('vasAlert_(10,10,true).flag'),false));
+test('annual uses twelve month sum',()=>assert.equal(run("vasValue_({...state,vasMode:'YEAR'},'M',2025,1).revenue"),210));
 console.log(n+' VAS checks PASS');

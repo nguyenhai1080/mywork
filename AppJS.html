@@ -118,6 +118,7 @@ function bindPageDelegation_() {
     if (!button) return;
 
     const action = button.dataset.action;
+    if(action==='vas-mode'){consumptionState_().vasMode=button.dataset.mode;renderCurrentPage_();return;}
     const taskId = button.dataset.taskId;
     marketAction_(action,button);
     mcAction_(action,button);
@@ -155,7 +156,7 @@ function bindPageDelegation_() {
     }
   });
 
-  pageContent.addEventListener('change', event=>{const map={'vas-quarter':'vasQuarter','vas-market':'vasMarket','kpi-basis':'compositionBasis','mc-market':'marketId','mc-year':'year','mc-month':'month','mc-view':'view','mc-status':'status'};if(map[event.target.id]){if(event.target.id==='mc-year'&&!event.target.checkValidity())return;consumptionState_()[map[event.target.id]]=event.target.value;renderCurrentPage_();}});
+  pageContent.addEventListener('change', event=>{const map={'vas-month':'vasMonth','vas-quarter':'vasQuarter','vas-market':'vasMarket','kpi-basis':'compositionBasis','mc-market':'marketId','mc-year':'year','mc-month':'month','mc-view':'view','mc-status':'status'};if(map[event.target.id]){if(event.target.id==='mc-year'&&!event.target.checkValidity())return;consumptionState_()[map[event.target.id]]=event.target.value;renderCurrentPage_();}});
   pageContent.addEventListener('input', event => {
     if(event.target.id==='market-search'){STATE.marketSearch=event.target.value;document.getElementById('market-table-host').innerHTML=renderMarketTable_();}
     if (event.target.id === 'task-search') {
