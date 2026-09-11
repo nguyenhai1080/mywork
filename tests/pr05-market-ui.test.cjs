@@ -2,6 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const dir=path.resolve(__dirname,'..');const c=vm.createContext({console,document:{getElementById:()=>null},setTimeout:()=>{}});
 const strip=s=>s.replace(/<\/?script[^>]*>/g,'');
 vm.runInContext(strip(fs.readFileSync(path.join(dir,'MarketJS.html'),'utf8')),c);
+vm.runInContext(strip(fs.readFileSync(path.join(dir,'ConsumptionJS.html'),'utf8')),c);
 vm.runInContext(strip(fs.readFileSync(path.join(dir,'AppJS.html'),'utf8')).replace('init_();',''),c);
 vm.runInContext("var host={innerHTML:''};document.getElementById=()=>host;STATE.page='markets';renderMarkets_=()=> 'MARKET SCREEN';renderCurrentPage_();",c);assert.equal(vm.runInContext('host.innerHTML',c),'MARKET SCREEN');console.log('PASS active page renderer routes to Market Contacts');
 vm.runInContext("var busy=false,sent=null,toasts=[];STATE.marketData={markets:[],contacts:[]};STATE.marketId='M1';STATE.editingContactId='';document.getElementById=()=>({elements:{isPrimary:{checked:true},isActive:{checked:true}}});validateForm_=()=>true;formObject_=()=>busy?{}:{contactName:'New contact',tel:'+00123 45678'};setModalBusy_=v=>busy=v;serverCall_=async(name,id,input)=>{sent=input;return {contacts:[{ContactID:'C1',MarketID:'M1',ContactName:input.contactName,IsPrimary:true}],contact:{ContactID:'C1'}}};closeModal_=()=>{};navigateTo=()=>{};showToast_=(m,t)=>toasts.push(t);",c);

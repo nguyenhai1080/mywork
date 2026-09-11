@@ -4,6 +4,7 @@ const PAGE_TITLES = {
   'tasks': 'Tasks',
   'projects': 'Projects',
   'markets': 'Market Contacts',
+  'consumption': 'Tiêu dùng di động',
   'dashboard': 'Dashboard'
 };
 
@@ -118,6 +119,7 @@ function bindPageDelegation_() {
     const action = button.dataset.action;
     const taskId = button.dataset.taskId;
     marketAction_(action,button);
+    mcAction_(action,button);
 
     if (action === 'new-project') openProjectModal_();
     if (action === 'open-project') openProject_(button.dataset.projectId);
@@ -152,6 +154,7 @@ function bindPageDelegation_() {
     }
   });
 
+  pageContent.addEventListener('change', event=>{const map={'mc-market':'marketId','mc-year':'year','mc-month':'month','mc-view':'view','mc-status':'status'};if(map[event.target.id]){if(event.target.id==='mc-year'&&!event.target.checkValidity())return;consumptionState_()[map[event.target.id]]=event.target.value;renderCurrentPage_();}});
   pageContent.addEventListener('input', event => {
     if(event.target.id==='market-search'){STATE.marketSearch=event.target.value;document.getElementById('market-table-host').innerHTML=renderMarketTable_();}
     if (event.target.id === 'task-search') {
@@ -174,6 +177,9 @@ function bindOverlayDelegation_() {
     if (!actionButton) return;
 
     const action = actionButton.dataset.modalAction;
+    if(action==='mc-save')mcSave_();
+    if(action==='mc-preview')mcPreview_();
+    if(action==='mc-import-save')mcImportSave_();
     if(action==='save-market')submitMarket_(false);
     if(action==='save-market-contact')submitMarket_(true);
     if (action === 'save-project') submitProject_();
@@ -188,6 +194,9 @@ function bindOverlayDelegation_() {
   });
 
   root.addEventListener('change', event => {
+    if(event.target.id==='mc-mode')mcMode_();
+    if(event.target.id==='mc-form-market'){consumptionState_().marketId=event.target.value==='VTG'?'__VTG__':event.target.value;mcForm_();}
+    if(event.target.id==='mc-form-scenario'){consumptionState_().editScenario=event.target.value;mcForm_();}
     if (event.target.id === 'result-status') {
       updateResultDynamic_();
     }
@@ -207,6 +216,7 @@ function closeMobileSidebar_() {
 
 function navigateTo(page) {
   STATE.page = page;
+  if(page==='consumption'&&!consumptionState_().data&&!consumptionState_().loading)loadConsumption_();
   if(page==='markets'&&!STATE.marketData&&!STATE.marketLoading)refreshMarkets_();
   STATE.currentTaskDetail = page === 'tasks' ? STATE.currentTaskDetail : null;
 
@@ -231,6 +241,7 @@ function renderCurrentPage_() {
     'tasks': renderTasks_,
     'projects': renderProjects_,
     'markets': renderMarkets_,
+    'consumption': renderConsumption_,
     'dashboard': renderDashboard_
   };
 
@@ -1260,6 +1271,7 @@ function renderCurrentPage_() {
     'tasks': renderTasks_,
     'projects': renderProjects_,
     'markets': renderMarkets_,
+    'consumption': renderConsumption_,
     'dashboard': renderDashboard_
   };
   target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
@@ -1438,7 +1450,7 @@ function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card
   const btn=document.getElementById('refresh-page-btn');
   if (!btn) return;
   btn.addEventListener('click', async()=>{
-    try { if(STATE.page==='markets'){await refreshMarkets_();return;} await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
+    try { if(STATE.page==='consumption'){await loadConsumption_();return;} if(STATE.page==='markets'){await refreshMarkets_();return;} await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
     catch(error){ showToast_(error.message||String(error),'error'); }
   });
 })();
