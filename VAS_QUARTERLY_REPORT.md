@@ -19,3 +19,5 @@ AppJS.html, Styles.html, VasReportJS.html, tests/vas-report.test.cjs, VAS_QUARTE
 
 ## Sửa kỳ chưa đủ dữ liệu
 Các bản ghi ACTUAL/DRAFT chưa chỉnh sửa (Revision 1), nguồn TD thuc.xlsx | TD thuc!, tháng 8–12/2026, toàn bộ Total/Voice/SMS/Data/VAS bằng 0 được nhận diện là placeholder của bản nguồn đến tháng 7. Chỉ loại khỏi tính báo cáo VAS, không sửa Sheet. Bản ghi chỉnh sửa (Revision > 1), đã chốt, nguồn khác hoặc số 0 lịch sử giữ nguyên. Quý/năm chưa đủ tháng không có doanh thu cả kỳ, YoY/QoQ hay cảnh báo. Bộ lọc ghi rõ cơ sở YoY. 23 kiểm thử VAS đạt.
+
+Theo yêu cầu làm rõ: báo cáo quý so cùng quý năm trước (Q3/2026 với Q3/2025); cảnh báo cũng dùng tỷ lệ này. Bỏ cột QoQ quý liền trước trên bảng để tránh nhầm.
