@@ -5,6 +5,7 @@ const PAGE_TITLES = {
   'projects': 'Projects',
   'markets': 'Market Contacts',
   'consumption': 'Tiêu dùng di động',
+  'vas-report': 'Báo cáo VAS',
   'dashboard': 'Dashboard'
 };
 
@@ -220,7 +221,7 @@ function closeMobileSidebar_() {
 
 function navigateTo(page) {
   STATE.page = page;
-  if(page==='consumption'&&!consumptionState_().data&&!consumptionState_().loading)loadConsumption_();
+  if((page==='consumption'||page==='vas-report')&&!consumptionState_().data&&!consumptionState_().loading)loadConsumption_();
   if(page==='markets'&&!STATE.marketData&&!STATE.marketLoading)refreshMarkets_();
   STATE.currentTaskDetail = page === 'tasks' ? STATE.currentTaskDetail : null;
 
@@ -246,6 +247,7 @@ function renderCurrentPage_() {
     'projects': renderProjects_,
     'markets': renderMarkets_,
     'consumption': renderConsumption_,
+    'vas-report': renderConsumption_,
     'dashboard': renderDashboard_
   };
 
@@ -1276,6 +1278,7 @@ function renderCurrentPage_() {
     'projects': renderProjects_,
     'markets': renderMarkets_,
     'consumption': renderConsumption_,
+    'vas-report': renderConsumption_,
     'dashboard': renderDashboard_
   };
   target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
@@ -1454,7 +1457,7 @@ function dashboardCardV2_(label,value,note) { return `<div class="dashboard-card
   const btn=document.getElementById('refresh-page-btn');
   if (!btn) return;
   btn.addEventListener('click', async()=>{
-    try { if(STATE.page==='consumption'){await loadConsumption_();return;} if(STATE.page==='markets'){await refreshMarkets_();return;} await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
+    try { if(STATE.page==='consumption'||STATE.page==='vas-report'){await loadConsumption_();return;} if(STATE.page==='markets'){await refreshMarkets_();return;} await Promise.all([refreshTasks_(),loadMyWorkData_()]); renderCurrentPage_(); showToast_('Refreshed.','success'); }
     catch(error){ showToast_(error.message||String(error),'error'); }
   });
 })();

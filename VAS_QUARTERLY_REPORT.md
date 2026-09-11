@@ -1,6 +1,6 @@
 # Báo cáo VAS theo quý
 
-Đã triển khai Web App phiên bản 21. Mở Tiêu dùng di động → Báo cáo → VAS theo quý.
+Đã triển khai Web App với menu riêng **Báo cáo VAS** trên thanh điều hướng chính. Trên màn hình hẹp, bấm ☰ để mở menu.
 
 ## Phạm vi
 - VTG dùng số gốc riêng; bảng gồm tất cả thị trường, bỏ VTCM và mã thử nghiệm.
