@@ -118,6 +118,7 @@ function bindPageDelegation_() {
     if (!button) return;
 
     const action = button.dataset.action;
+    if(action==='monthly-open'){monthlyOpen_();return;}
     if(action==='vas-mode'){consumptionState_().vasMode=button.dataset.mode;renderCurrentPage_();return;}
     const taskId = button.dataset.taskId;
     marketAction_(action,button);
@@ -179,6 +180,8 @@ function bindOverlayDelegation_() {
     if (!actionButton) return;
 
     const action = actionButton.dataset.modalAction;
+    if(action==='monthly-preview'){monthlyPreview_();return;}
+    if(action==='monthly-save'){monthlySave_();return;}
     if(action==='kpi-save')kpiSave_();
     if(action==='kpi-preview')kpiPreview_();
     if(action==='kpi-import-save')kpiPersist_(consumptionState_().kpiImport);
@@ -252,7 +255,7 @@ function renderCurrentPage_() {
     'dashboard': renderDashboard_
   };
 
-  target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
+  target.innerHTML = (['consumption','vas-report'].includes(STATE.page)?'<p><button class="secondary-btn" data-action="monthly-open">Upload KPI tháng</button></p>':'')+(renderers[STATE.page] || renderMyWork_)();
 }
 
 async function loadTaskBootstrap_() {
@@ -1282,7 +1285,7 @@ function renderCurrentPage_() {
     'vas-report': renderConsumption_,
     'dashboard': renderDashboard_
   };
-  target.innerHTML = (renderers[STATE.page] || renderMyWork_)();
+  target.innerHTML = (['consumption','vas-report'].includes(STATE.page)?'<p><button class="secondary-btn" data-action="monthly-open">Upload KPI tháng</button></p>':'')+(renderers[STATE.page] || renderMyWork_)();
   if (STATE.currentTaskDetail && document.getElementById('task-drawer').classList.contains('open')) {
     renderTaskDrawerV2_(STATE.currentTaskDetail);
   }
