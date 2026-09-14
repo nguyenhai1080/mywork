@@ -1,0 +1,1 @@
+const fs=require('fs'),path=require('path'),assert=require('assert/strict');const m=JSON.parse(fs.readFileSync(path.join(__dirname,'../appsscript.json'),'utf8'));assert.deepEqual(m.webapp,{access:'MYSELF',executeAs:'USER_DEPLOYING'});console.log('PASS Web App entry point and original access preserved');
