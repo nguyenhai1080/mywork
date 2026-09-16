@@ -31,3 +31,5 @@ test('delta contribution uses absolute increments not growth rates',()=>{assert.
 test('Q2 cumulative covers January to June and rejects missing January',()=>{run("contrib.vasMode='QUARTER';contrib.data.records.forEach(r=>r.VAS=r.Month<=3?10:20)");assert.equal(run("vasYtd_(contrib,'M',2026)"),90);run('contrib.data.records=contrib.data.records.filter(r=>r.Month!==1)');assert.equal(run("vasYtd_(contrib,'M',2026)"),null);});
 
 test('Delta YoY is selected period difference and missing prior is null',()=>{assert.equal(run("vasCompare_(state,'M',2025,2).deltaYoy"),30);assert.equal(run("vasCompare_(state,'M',2023,2).deltaYoy"),null);});
+
+test('report groups separate Q2 period from cumulative period',()=>{run("var grouped={...state,year:2026,vasMode:'QUARTER',vasQuarter:2}");assert.equal(run('vasColumnGroups_(grouped)[0].label'),'Quy mô và cơ cấu · T4–T6/2026');assert.equal(run('vasColumnGroups_(grouped)[2].label'),'Đóng góp lũy kế vào VTG · T1–T6/2026');assert.equal(run("vasColumnGroups_(grouped).flatMap(g=>g.columns).map(c=>c.key).join(',')"),'total,revenue,share,lastYear,deltaYoy,yoy,qoq,contribution,deltaContribution,alert,quality');});
