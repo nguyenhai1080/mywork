@@ -29,3 +29,5 @@ for(const mode of ['MONTH','QUARTER','YEAR'])test('VTG contribution uses origina
 
 test('delta contribution uses absolute increments not growth rates',()=>{assert.equal(run('vasContributions_(120,100,600,500).deltaContribution'),20);assert.equal(run('vasContributions_(90,100,600,500).deltaContribution'),-10);assert.equal(run('vasContributions_(250,100,600,500).deltaContribution'),150);assert.equal(run('vasContributions_(120,100,500,500).deltaContribution'),null);assert.equal(run('vasContributions_(120,null,600,500).deltaContribution'),null);});
 test('Q2 cumulative covers January to June and rejects missing January',()=>{run("contrib.vasMode='QUARTER';contrib.data.records.forEach(r=>r.VAS=r.Month<=3?10:20)");assert.equal(run("vasYtd_(contrib,'M',2026)"),90);run('contrib.data.records=contrib.data.records.filter(r=>r.Month!==1)');assert.equal(run("vasYtd_(contrib,'M',2026)"),null);});
+
+test('Delta YoY is selected period difference and missing prior is null',()=>{assert.equal(run("vasCompare_(state,'M',2025,2).deltaYoy"),30);assert.equal(run("vasCompare_(state,'M',2023,2).deltaYoy"),null);});
